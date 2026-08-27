@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Los vampiros supervivientes de Ezequiel</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🧛%3C/text%3E%3C/svg%3E">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="1280" height="720"></canvas>
+
+        <!-- HUD Gameplay -->
+        <div id="hud" class="ui-layer hidden">
+            <div class="hud-top">
+                <div class="hud-bar">
+                    <span class="hud-label">HP</span>
+                    <div class="bar-track"><div id="hp-fill" class="bar-fill hp"></div></div>
+                    <span id="hp-text" class="hud-value">100/100</span>
+                </div>
+                <div class="hud-bar">
+                    <span class="hud-label">XP</span>
+                    <div class="bar-track"><div id="xp-fill" class="bar-fill xp"></div></div>
+                    <span id="xp-text" class="hud-value">Lv 1</span>
+                </div>
+                <div class="hud-stats">
+                    <span id="timer">00:00</span>
+                    <span id="kill-counter">💀 0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- MAIN MENU -->
+        <div id="screen-menu" class="ui-screen active" data-state="MENU">
+            <div class="screen-content menu-content">
+                <h1 class="game-title">LOS VAMPIROS<br><span>SUPERVIVIENTES</span><br><em>de Ezequiel</em></h1>
+                <p class="subtitle">Sobrevive a la noche eterna • Elige tu destino</p>
+                <div class="menu-actions">
+                    <button id="btn-play" class="btn primary">▶ JUGAR</button>
+                    <button id="btn-howto" class="btn secondary">¿CÓMO JUGAR?</button>
+                </div>
+                <div id="howto-panel" class="howto hidden">
+                    <h3>Controles PASO 4+5</h3>
+                    <p><b>WASD / Flechas</b> — Moverse &nbsp;|&nbsp; <b>P / ESC</b> — Pausa &nbsp;|&nbsp; <b>G</b> grid &nbsp;|&nbsp; <b>M</b> mute</p>
+                    <p><b>ATAQUE AUTOMÁTICO</b> exclusivo por clase. Absorbe <b>💎 XP</b> con imán. <b>ESPACIO</b> solo reinicia en Game Over.</p>
+                    <p>Armas: <b>⚔️ Espada</b> + <b>🛡️ Escudo</b> (Caballero) | <b>🔮 Varita</b> + <b>🔥 Bola</b> (Mago) | <b>🗡️ Dagas</b> + <b>🧄 Aura (solo Pícaro)</b></p>
+                    <p>Enemigos: <b>🧛 Grunt</b>, <b>👹 Tanque</b>, <b>🦇 Corredor</b>, <b>🧟 Nigromante</b> (dispara).</p>
+                </div>
+                <p class="foot">Vanilla JS • Canvas 2D • Spatial Hash Grid • deltaTime</p>
+            </div>
+        </div>
+
+        <!-- CLASS SELECTION -->
+        <div id="screen-class" class="ui-screen hidden" data-state="CLASS_SELECT">
+            <div class="screen-content">
+                <h2 class="screen-title">ELIGE TU CLASE</h2>
+                <div class="class-grid">
+                    <div class="class-card" data-class="caballero">
+                        <canvas class="pixel-portrait" data-class="caballero" width="64" height="64"></canvas>
+                        <h3>Caballero</h3>
+                        <p class="class-desc"><b>⚔️ Espada</b> arco auto + <b>🛡️ Escudo</b> que bloquea 1 golpe y reaparece. Exclusivo.</p>
+                        <ul class="class-stats">
+                            <li><span>❤️ Vida</span><b>+45</b></li>
+                            <li><span>🛡️ Escudo</span><b>1 carga / 11s CD</b></li>
+                            <li><span>⚔️ Espada</span><b>110 rango</b></li>
+                            <li><span>🧩 Mejora</span><b>🛡️ +1 carga</b></li>
+                        </ul>
+                        <button class="btn primary pick-class" data-class="caballero">ELEGIR CABALLERO</button>
+                    </div>
+                    <div class="class-card featured" data-class="mago">
+                        <canvas class="pixel-portrait" data-class="mago" width="64" height="64"></canvas>
+                        <h3>Mago</h3>
+                        <p class="class-desc"><b>🔮 Varita</b> + <b>🔥 Bola de Fuego</b> explosiva auto-target. Exclusivo.</p>
+                        <ul class="class-stats">
+                            <li><span>⏱️ Cooldown</span><b>-22%</b></li>
+                            <li><span>🔥 Bola</span><b>34 dmg / 72 exp</b></li>
+                            <li><span>💥 Daño</span><b>x1.30</b></li>
+                            <li><span>🧩 Mejora</span><b>🔥 +25% explosión</b></li>
+                        </ul>
+                        <button class="btn primary pick-class" data-class="mago">ELEGIR MAGO</button>
+                    </div>
+                    <div class="class-card" data-class="picaro">
+                        <canvas class="pixel-portrait" data-class="picaro" width="64" height="64"></canvas>
+                        <h3>Pícaro</h3>
+                        <p class="class-desc"><b>🗡️ Dagas</b> + <b>🧄 Aura de Ajo</b> — solo el Pícaro la tiene. Exclusiva.</p>
+                        <ul class="class-stats">
+                            <li><span>🏃 Velocidad</span><b>+52</b></li>
+                            <li><span>🎯 Crítico</span><b>18% x1.75</b></li>
+                            <li><span>🧄 Aura</span><b>75 radio / 7 dmg</b></li>
+                            <li><span>🧩 Mejora</span><b>🧄 +20 radio</b></li>
+                        </ul>
+                        <button class="btn primary pick-class" data-class="picaro">ELEGIR PÍCARO</button>
+                    </div>
+                </div>
+                <button id="btn-back-menu" class="btn secondary small">← Volver</button>
+            </div>
+        </div>
+
+        <!-- LEVEL UP -->
+        <div id="screen-levelup" class="ui-screen hidden" data-state="LEVEL_UP">
+            <div class="screen-content">
+                <h2 class="screen-title">¡SUBISTE DE NIVEL!</h2>
+                <p class="subtitle">Elige una mejora</p>
+                <div id="upgrade-options" class="upgrade-grid">
+                    <!-- Se llena por JS en Paso 5: 3 opciones RNG -->
+                </div>
+                <p class="pause-hint">Juego en pausa</p>
+            </div>
+        </div>
+
+        <!-- GAME OVER -->
+        <div id="screen-gameover" class="ui-screen hidden" data-state="GAME_OVER">
+            <div class="screen-content">
+                <h2 class="screen-title gameover">HAS CAÍDO</h2>
+                <div class="gameover-stats">
+                    <p>Tiempo sobrevivido: <b id="stat-time">00:00</b></p>
+                    <p>Enemigos eliminados: <b id="stat-kills">0</b></p>
+                    <p>Nivel alcanzado: <b id="stat-level">1</b></p>
+                </div>
+                <div class="menu-actions">
+                    <button id="btn-retry" class="btn primary">↻ REINTENTAR</button>
+                    <button id="btn-menu" class="btn secondary">MENÚ PRINCIPAL</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PAUSED -->
+        <div id="screen-paused" class="ui-screen hidden" data-state="PAUSED">
+            <div class="screen-content">
+                <h2 class="screen-title">PAUSA</h2>
+                <div class="menu-actions">
+                    <button id="btn-resume" class="btn primary">▶ CONTINUAR</button>
+                    <button id="btn-quit" class="btn secondary">SALIR AL MENÚ</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="debug" class="debug hidden">
+            <span id="dbg-fps">FPS: --</span> |
+            <span id="dbg-entities">Ent: 0</span> |
+            <span id="dbg-state">State: MENU</span>
+        </div>
+
+        <!-- Joystick mobile -->
+        <div id="joystick" class="joystick hidden">
+            <div id="joystick-stick" class="stick"></div>
+        </div>
+        <div id="touch-hint" class="touch-hint hidden">◉ arrastra para moverte</div>
+        <div id="rotate-hint" class="rotate-hint">↻ GIRA EL MÓVIL PARA JUGAR MEJOR</div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

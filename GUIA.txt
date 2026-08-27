@@ -1,0 +1,40 @@
+Componente Tecnología / Implementación Requerida
+Motor /
+Gráficos
+
+HTML5 Canvas 2D API / JavaScript (ES6) / CSS3. Estrictamente sin frameworks
+externos (React, Angular, etc.) para mantener la latencia baja y manipular el DOM/
+Canvas eficientemente.
+
+Patrón de
+Diseño
+
+Bucle de juego clásico: requestAnimationFrame. Actualización separada del
+renderizado. Modelo Entidad-Componente (ECS) o Programación Orientada a
+Objetos con clases (Player, Enemy, Projectile, PowerUp).
+
+Optimización
+(Crítico)
+
+Sistema de Partición Espacial (Spatial Hashing o Grid). Un juego "bullet heaven"
+tendrá más de 500-1000 enemigos simultáneos. Chequear colisiones O(n2) destruirá
+el framerate en JS.
+
+Cálculo de
+Físicas
+
+Uso de deltaTime para asegurar que el movimiento y la cadencia de disparo sean
+independientes de la tasa de refresco del monitor (60hz vs 144hz).
+
+II. ESTRUCTURA DE SISTEMAS DEL JUEGO
+El juego se divide en los siguientes sistemas operativos:
+State Machine (Gestor de Estados): MENU, CLASS_SELECT, GAMEPLAY, PAUSED, LEVEL_UP,
+GAME_OVER.
+Director de Oleadas (Wave Manager): Escalado logarítmico o lineal por minuto. Genera tipos de
+enemigos específicos según el temporizador global. Ecuación base de spawn: Rate = BaseRate / (1 + (Time
+/ 60)).
+Sistema de Armas y Auto-Apuntado: Patrones: Proyectil Dirigido (enemigo más cercano), Proyectil
+Aleatorio, Área de Efecto (AoE) alrededor del jugador, y Escudos Orbitantes.
+Progresión y XP: Gemas dejadas por enemigos. Absorción usando distancia euclidiana vs radio
+magnético del jugador. Fórmula XP: XP_Next = 100 * (Level)1.5
+.
