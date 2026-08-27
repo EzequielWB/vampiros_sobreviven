@@ -71,8 +71,31 @@ body::before{
   color:#94A3B8; font-family:'Press Start 2P',monospace; font-size:7px; letter-spacing:0.06em;
   padding:6px 8px; z-index:10; pointer-events:none; text-align:center;
 }
+.rotate-overlay{
+  display:none;
+  position:fixed; inset:0;
+  background: #0F172A;
+  border:4px solid #000;
+  z-index:100;
+  align-items:center; justify-content:center;
+  text-align:center;
+  padding:20px;
+}
+.rotate-overlay .rotate-content{
+  background:#1E1E24; border:3px solid #000; box-shadow:4px 4px 0 #000;
+  padding:22px 18px; max-width:360px; width:92%;
+}
+.rotate-overlay .rotate-icon{ font-family:'Press Start 2P',monospace; font-size:22px; color:#E2E8F0; text-shadow:2px 2px 0 #000; margin-bottom:12px; }
+.rotate-overlay h2{ font-family:'Press Start 2P',monospace; font-size:12px; color:#E2E8F0; margin-bottom:10px; letter-spacing:0.06em; }
+.rotate-overlay p{ font-family:'VT323',monospace; font-size:16px; color:#94A3B8; line-height:1.3; }
+.rotate-overlay p.small{ font-size:12px; color:#64748B; margin-top:8px; }
 @media (max-width: 860px) and (orientation: portrait){
   .rotate-hint{ display:block; }
+}
+/* Solo bloquear el JUEGO en portrait, no el menú: overlay solo en gameplay */
+@media (max-width: 860px) and (orientation: portrait) and (hover: none) and (pointer: coarse){
+  body.gameplay .rotate-overlay{ display:flex; }
+  body.gameplay #game-container{ opacity:0.18; pointer-events:none; filter:blur(2px); }
 }
 #game-container::after{
   content:"";position:absolute;inset:0;pointer-events:none;
@@ -459,6 +482,55 @@ body::before{
   transition:transform .04s linear;
 }
 .joystick.active{ background:rgba(59,7,84,0.32); }
+/* Aviso lateral pixel amarillo */
+.side-notice{
+  position:absolute;
+  right: -2px; top:50%;
+  transform:translateY(-50%);
+  background:#FFBE0B;
+  border:3px solid #000;
+  box-shadow:4px 4px 0 #000;
+  color:#000;
+  font-family:'Press Start 2P',monospace;
+  font-size:7px;
+  line-height:1.35;
+  letter-spacing:0.04em;
+  padding:10px 8px 10px 10px;
+  z-index:6;
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  text-align:center;
+  pointer-events:none;
+  image-rendering:pixelated;
+}
+.side-notice .pixel-excl{
+  width:28px; height:28px;
+  background:#000;
+  color:#FFBE0B;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Press Start 2P',monospace;
+  font-size:18px;
+  line-height:1;
+  border:2px solid #000;
+  box-shadow:2px 2px 0 #000, inset 0 -3px 0 rgba(0,0,0,0.35);
+  text-shadow:1px 1px 0 #000;
+}
+.side-notice span{ display:block; }
+@media (max-width: 860px){
+  .side-notice{
+    right:0;
+    top:auto; bottom:38%;
+    transform:none;
+    flex-direction:row;
+    padding:6px 8px;
+    font-size:6px;
+    gap:8px;
+    border-right:none;
+  }
+  .side-notice .pixel-excl{ width:22px; height:22px; font-size:14px; }
+}
+@media (hover:hover) and (pointer:fine){
+  .side-notice{ opacity:0.92; }
+}
 @media (max-width: 860px){
   .joystick{ width:130px; height:130px; left:10px; bottom:10px; }
   .joystick .stick{ width:52px; height:52px; }
@@ -496,13 +568,19 @@ body::before{
   .touch-hint{ display:none; }
 }
 
-/* Responsive pixel: apilar */
-@media (max-width: 860px){
+/* Responsive pixel: en portrait apilar, en landscape mantener horizontal como PC */
+@media (max-width: 860px) and (orientation: portrait){
   .class-grid,.upgrade-grid{grid-template-columns:1fr}
   .game-title{font-size:18px}
   .hud-top{flex-wrap:wrap; gap:6px}
-  .hud-bar{padding:4px 6px}
-  .hud-value{font-size:6px; min-width:48px}
   .pixel-portrait{width:72px;height:72px}
   .screen-content{padding:14px 10px}
+}
+@media (max-width: 860px) and (orientation: landscape){
+  .class-grid{grid-template-columns:repeat(3,1fr); gap:10px}
+  .upgrade-grid{grid-template-columns:repeat(3,1fr)}
+  .game-title{font-size:16px}
+  .hud-top{flex-wrap:nowrap; gap:6px}
+  .pixel-portrait{width:64px;height:64px}
+  .screen-content{padding:10px 12px}
 }

@@ -735,21 +735,20 @@ export class Game {
             ctx.fillText('Auto-ataque - No requiere teclas', this.logicalWidth-16, 72);
         }
 
-        // Debug overlay
+        // HUD minimal: solo Oleadas / Tiempo / Enemigos
         if(this.state===GameState.GAMEPLAY){
-            const s=this.entityManager.getCollisionStats();
-            ctx.fillStyle='rgba(0,0,0,0.54)'; ctx.fillRect(10,46,340,68); ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.strokeRect(10,46,340,68);
-            ctx.fillStyle='rgba(255,255,255,0.92)'; ctx.font='10px JetBrains Mono, monospace'; ctx.textAlign='left';
-            const typeCounts = {};
-            for(const e of this.entityManager.enemies) typeCounts[e.def?.id||e.enemyType||'grunt']=(typeCounts[e.def?.id||'grunt']||0)+1;
-            const mixStr = Object.entries(typeCounts).map(([k,v])=>`${k}:${v}`).join(' ');
-            ctx.fillText(`Ent: ${this.entityManager.count()}  Ene: ${this.entityManager.enemyCount()} [${mixStr}]  Celdas:${s.grid.cellsUsed}`, 16, 60);
-            ctx.fillText(`Oleada #${this.waveDirector.waveNumber}  Intervalo: ${(this.waveDirector.spawnCooldown).toFixed(2)}s`, 16, 74);
-            ctx.fillText(`Grid: ${s.checks} checks vs Brute ${s.brute}  Ahorro ${s.saved}%`, 16, 88);
-            ctx.fillStyle=s.saved>80?'#6EE7B7':s.saved>50?'#A78BFA':'#F43F5E'; ctx.fillText(`[OK] Spawn en bordes - Escalado x minuto - Paleta gótica`,16,102);
-            ctx.fillStyle='rgba(255,255,255,0.55)'; ctx.fillText(`G:grid M:mute T:+120  ESPACIO: reiniciar (muerte)`,16,112);
+            // ya tenemos HUD DOM con tiempo y kills, acá solo oleada + enemigos en canvas
+            ctx.fillStyle='rgba(15,23,42,0.82)';
+            ctx.fillRect(10, 46, 220, 28);
+            ctx.strokeStyle='#000'; ctx.lineWidth=2; ctx.strokeRect(10,46,220,28);
+            ctx.fillStyle='#E2E8F0'; ctx.font='10px \"Press Start 2P\", monospace'; ctx.textAlign='left';
+            ctx.fillText(`OLEADA ${this.waveDirector.waveNumber}`, 16, 62);
+            ctx.font='8px \"Press Start 2P\", monospace'; ctx.fillStyle='#94A3B8';
+            ctx.fillText(`ENEMIGOS ${this.entityManager.enemyCount()}`, 16, 72);
+            // tiempo ya está en HUD DOM, pero lo duplicamos sutil si querés
             if(this.entityManager.enemyCount()===0){
-                ctx.fillStyle='rgba(255,255,255,0.35)'; ctx.textAlign='center'; ctx.fillText('¡Sobrevive! Armas automáticas por clase', cam.w/2, 24);
+                ctx.fillStyle='rgba(226,232,240,0.55)'; ctx.font='8px \"Press Start 2P\", monospace'; ctx.textAlign='center';
+                ctx.fillText('SOBREVIVE', cam.w/2, 26);
             }
         }
     }
