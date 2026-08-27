@@ -49,19 +49,9 @@ body::before{
 }
 @media (max-width: 860px){
   #game-container{
-    width:98vw;
-    max-height:88vh;
     border-width:3px;
     box-shadow: 4px 4px 0 #000, 0 0 0 3px #000;
   }
-  /* En portrait el 16:9 queda muy chico (202px en 360px). Damos un poco más de altura y hint para girar */
-  @media (orientation: portrait){
-    #game-container{ width:98vw; max-height:62vh; }
-    body{ align-items:flex-start; padding-top:4vh; }
-  }
-}
-@media (max-height: 500px) and (orientation: landscape){
-  #game-container{ max-height:96vh; width:auto; height:96vh; max-width:98vw; }
 }
 /* Hint girar dispositivo solo en portrait y gameplay */
 .rotate-hint{

@@ -104,9 +104,8 @@ export class Game {
         this.canvas.style.width = w + 'px';
         this.canvas.style.height = h + 'px';
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        // En mobile, zoom 1.33x para que no se vea chiquito
-        this.logicalWidth = isMobile ? 960 : CONFIG.CANVAS.WIDTH;
-        this.logicalHeight = isMobile ? 540 : CONFIG.CANVAS.HEIGHT;
+        this.logicalWidth = CONFIG.CANVAS.WIDTH;
+        this.logicalHeight = CONFIG.CANVAS.HEIGHT;
         this.camera.w = this.logicalWidth;
         this.camera.h = this.logicalHeight;
         this._gridPattern = null;

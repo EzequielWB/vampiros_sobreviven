@@ -170,13 +170,10 @@ export class Player {
             ctx.beginPath(); ctx.arc(sx, sy, this.stats.magnetRadius, 0, Math.PI*2); ctx.stroke();
             ctx.setLineDash([]);
         }
-        // Sprite pixel art -- más grande en mobile para que no se vea chiquito
         const sprite = SPRITES[this.classId] || SPRITES.caballero;
         const flip = this.facing < 0;
         const flash = this.hitFlash > 0;
-        const isMobile = (typeof window !== 'undefined' && window.innerWidth < 860);
-        const scale = isMobile ? 2.9 : 2;
-        drawPixelSprite(ctx, sprite, sx, sy - 1, scale, flip, flash);
+        drawPixelSprite(ctx, sprite, sx, sy - 1, 2, flip, flash);
 
         // Barra vida pixel
         if (this.hp < this.stats.maxHealth) {
