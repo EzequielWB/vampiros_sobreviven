@@ -33,6 +33,31 @@ export class Projectile {
         const sx = this.x - camera.x, sy = this.y - camera.y;
         if (sx < -20 || sx > camera.w + 20 || sy < -20 || sy > camera.h + 20) return;
         ctx.imageSmoothingEnabled=false;
+        if(this.isArrow){
+            // flecha pixel alargada
+            const ang = this.angle || Math.atan2(this.vy, this.vx);
+            ctx.save();
+            ctx.translate(sx, sy);
+            ctx.rotate(ang);
+            // estela
+            ctx.fillStyle=this.color+'44';
+            ctx.fillRect(-10, -1, 6, 2);
+            // astil
+            ctx.fillStyle='#000';
+            ctx.fillRect(-7, -2, 14, 4);
+            ctx.fillStyle=this.color;
+            ctx.fillRect(-6, -1, 12, 2);
+            // punta
+            ctx.fillStyle='#000';
+            ctx.fillRect(6, -3, 6, 6);
+            ctx.fillStyle='#FFFFFF';
+            ctx.beginPath(); ctx.moveTo(11,0); ctx.lineTo(5,-3); ctx.lineTo(5,3); ctx.closePath(); ctx.fill();
+            // emplumado
+            ctx.fillStyle='#991B1B';
+            ctx.fillRect(-8, -2, 3, 4);
+            ctx.restore();
+            return;
+        }
         // estela pixel 3x3
         ctx.fillStyle = this.color + '44';
         ctx.fillRect(Math.floor(sx - this.vx*0.018)-1, Math.floor(sy - this.vy*0.018)-1, 4, 4);

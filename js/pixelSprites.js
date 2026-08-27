@@ -23,6 +23,12 @@ export const PALETTE = {
   'B': '#1E1E24',
   'W': '#FFFFFF',
   'Y': '#FFBE0B',
+  'A': '#1E40AF',
+  'a': '#60A5FA',
+  'C': '#1E3A8A',
+  'c': '#3B82F6',
+  'E': '#991B1B',
+  'e': '#D4D4D8',
   '.': null
 };
 
@@ -84,6 +90,66 @@ export const SPRITE_PICARO = [
   "....XXXXXXXX....",
   ".....XXXXXX.....",
   "......XXXX......",
+];
+
+// Artoria -- azul real con dorado, Excalibur (azul #1E40AF, amarillo #FFBE0B)
+export const SPRITE_ARTORIA = [
+  "......XXXX......",
+  ".....XXXXXX.....",
+  "....XXXXXXXX....",
+  "...XXAAAAAAXX...",
+  "..XXAAAYYYAAXX..",
+  ".XXAAYYYAYYYAAXX",
+  ".XXAAY....YAAXX.",
+  "XXAAYY....YYAAXX",
+  "XXAAAYYYYYYYAAXX",
+  "XXAAWWWWWWWWAAXX",
+  "XXAAWMMMMMWWAAXX",
+  ".XXAAWWWWWWAAXX.",
+  "..XXAAAAAAAAXX..",
+  "...XXXXXXXXXX...",
+  "....XXXXXXXX....",
+  ".....XXXXXX.....",
+];
+
+// Cu Chulainn -- azul y rojo, lanza Gae Bolg
+export const SPRITE_CU = [
+  "......XXXX......",
+  ".....XXXXXX.....",
+  "....XXXXXXXX....",
+  "...XXCCCCCCXX...",
+  "..XXCCCRRRCCXX..",
+  ".XXCCRRRRRRCCXX.",
+  ".XXCCRR..RRCCXX.",
+  "XXCCCRRRRRRCCXX.",
+  "XXCCRR....RRCCXX",
+  "XXCCRR....RRCCXX",
+  "XXCCCCCCCCCCCCXX",
+  ".XXCCCCCCCCCCXX.",
+  "..XXCCCCCCCCXX..",
+  "...XXXXXXXXXX...",
+  "....XXXXRXXXX...",
+  ".....XXXXXX.....",
+];
+
+// Emiya -- rojo/gris/blanco, arco
+export const SPRITE_EMIYA = [
+  "......XXXX......",
+  ".....XXXXXX.....",
+  "....XXXXXXXX....",
+  "...XXWWWWWWXX...",
+  "..XXWWWWWWWWXX..",
+  ".XXWWWWWWWWWWXX.",
+  ".XXWWEEEEWWWWXX.",
+  "XXWWEE....EEWWXX",
+  "XXWWEE....EEWWXX",
+  "XXWWEEEEEEEEWWXX",
+  "XXWWEEEEEEEEWWXX",
+  ".XXWWWWWWWWWWXX.",
+  "..XXWWWWWWWWXX..",
+  "...XXXXXXXXXX...",
+  "....XXX..XXX....",
+  ".....XX..XX.....",
 ];
 
 // Enemigos
@@ -170,6 +236,9 @@ export const SPRITES = {
   caballero: SPRITE_CABALLERO,
   mago: SPRITE_MAGO,
   picaro: SPRITE_PICARO,
+  artoria: SPRITE_ARTORIA,
+  cu: SPRITE_CU,
+  emiya: SPRITE_EMIYA,
   grunt: SPRITE_GRUNT,
   tank: SPRITE_TANK,
   runner: SPRITE_RUNNER,
@@ -179,7 +248,7 @@ export const SPRITES = {
 const _cache = new Map();
 function _getCachedCanvas(sprite, scale, whiteFlash){
   if(typeof document === 'undefined') return null;
-  const id = sprite === SPRITE_CABALLERO ? 'cab' : sprite === SPRITE_MAGO ? 'mag' : sprite === SPRITE_PICARO ? 'pic' : sprite === SPRITE_GRUNT ? 'gru' : sprite === SPRITE_TANK ? 'tnk' : sprite === SPRITE_RUNNER ? 'run' : sprite === SPRITE_SHOOTER ? 'sho' : 'unk';
+  const id = sprite === SPRITE_CABALLERO ? 'cab' : sprite === SPRITE_MAGO ? 'mag' : sprite === SPRITE_PICARO ? 'pic' : sprite === SPRITE_ARTORIA ? 'art' : sprite === SPRITE_CU ? 'cu' : sprite === SPRITE_EMIYA ? 'emi' : sprite === SPRITE_GRUNT ? 'gru' : sprite === SPRITE_TANK ? 'tnk' : sprite === SPRITE_RUNNER ? 'run' : sprite === SPRITE_SHOOTER ? 'sho' : 'unk';
   const key = `${id}_${scale}_${whiteFlash?1:0}`;
   if(_cache.has(key)) return _cache.get(key);
   const w = sprite[0].length, h = sprite.length;
@@ -256,9 +325,8 @@ export function renderClassPreview(canvas, classId) {
     canvas.style.height = size + 'px';
     ctx.setTransform(dpr,0,0,dpr,0,0);
     ctx.imageSmoothingEnabled = false;
-    // fondo gótico con resplandor según clase
-    const bg = { caballero:'#1E1E24', mago:'#1A1030', picaro:'#0F1E1A' }[classId] || '#1E1E24';
-    const glow = { caballero:'rgba(97,12,39,0.22)', mago:'rgba(59,7,84,0.22)', picaro:'rgba(0,76,64,0.22)' }[classId] || 'rgba(59,7,84,0.15)';
+    const bg = { caballero:'#1E1E24', mago:'#1A1030', picaro:'#0F1E1A', artoria:'#0F1E3A', cu:'#0F1A2A', emiya:'#1E1E24' }[classId] || '#1E1E24';
+    const glow = { caballero:'rgba(97,12,39,0.22)', mago:'rgba(59,7,84,0.22)', picaro:'rgba(0,76,64,0.22)', artoria:'rgba(30,64,175,0.24)', cu:'rgba(185,28,28,0.22)', emiya:'rgba(212,212,216,0.20)' }[classId] || 'rgba(59,7,84,0.15)';
     ctx.fillStyle = bg;
     ctx.fillRect(0,0,size,size);
     // resplandor central
@@ -271,8 +339,7 @@ export function renderClassPreview(canvas, classId) {
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 2;
     ctx.strokeRect(1,1,size-2,size-2);
-    // borde interior sutil clase
-    ctx.strokeStyle = { caballero:'#610C27', mago:'#3B0754', picaro:'#004C40' }[classId] || '#000';
+    ctx.strokeStyle = { caballero:'#610C27', mago:'#3B0754', picaro:'#004C40', artoria:'#1E40AF', cu:'#991B1B', emiya:'#D4D4D8' }[classId] || '#000';
     ctx.lineWidth = 1;
     ctx.strokeRect(3,3,size-6,size-6);
     // patrón grid sutil

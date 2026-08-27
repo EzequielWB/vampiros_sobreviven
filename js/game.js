@@ -211,8 +211,10 @@ export class Game {
         this.floatingTexts = [];
         this.explosions = [];
         this.shieldBreaks = [];
-        this._timers = { whip: 0.35, wand: 0.28, dagger: 0.2, garlic: 0, shield: 1.0, fireball: 1.2 };
+        this._timers = { whip: 0.35, wand: 0.28, dagger: 0.2, garlic: 0, shield: 1.0, fireball: 1.2, lance: 0.28, bow: 0.28 };
         this._whipFlash = 0;
+        this._lanceFlash = 0;
+        this._lanceAngle = 0;
         this._garlicPulse = 0;
         this._shieldPulse = 0;
 
@@ -227,7 +229,10 @@ export class Game {
         // Armas iniciales por clase -- técnicas exclusivas
         if (classId === 'mago') this.player.weapons = ['wand','fireball'];
         else if (classId === 'caballero') this.player.weapons = ['whip','shield'];
-        else this.player.weapons = ['dagger','garlic']; // pícaro: dagas + aura exclusiva
+        else if (classId === 'artoria') this.player.weapons = ['artoria_sword'];
+        else if (classId === 'cu') this.player.weapons = ['lance'];
+        else if (classId === 'emiya') this.player.weapons = ['bow'];
+        else this.player.weapons = ['dagger','garlic']; // pícaro
 
         this.spawnGemBurst(px + 90, py, 3);
         this.spawnGemBurst(px - 80, py - 60, 2);
@@ -248,11 +253,17 @@ export class Game {
 
     spawnDamageNumber(x,y,text,color='#fff'){
         if(this.floatingTexts.length > 18) this.floatingTexts.shift();
-        // cap de daño flotante en mobile para no saturar
         if(window.innerWidth < 860 && this.floatingTexts.length > 10) return;
-        this.floatingTexts.push({x,y,vy:-44,life:0.75,maxLife:0.75,text,color});
+        this.floatingTexts.push({x,y,vy:-44,life:0.75,maxLife:0.75,text,color, scale:1});
     }
     spawnPickupText(x,y,text,color){ this.spawnDamageNumber(x,y,text,color); }
+    spawnExcaliburText(){
+        const p=this.player;
+        // Texto grande amarillo pixel sobre la cabeza, dura 1.1s
+        this.floatingTexts.push({x:p.x, y:p.y-42, vy:-18, life:1.15, maxLife:1.15, text:'EXCALIBUR!!', color:'#FFBE0B', scale:1.85, isExcalibur:true});
+        // destello
+        this.spawnExplosion(p.x, p.y-12, 18, '#FFBE0B');
+    }
     spawnGemBurst(x,y,count=3){
         for(let i=0;i<count;i++){ const ang=Math.random()*Math.PI*2, r=18+Math.random()*26; this.entityManager.add(new Gem(x+Math.cos(ang)*r, y+Math.sin(ang)*r)); }
     }
@@ -399,6 +410,45 @@ export class Game {
             this._timers.garlic -= dt;
             if(this._timers.garlic<=0){ this._timers.garlic=0.32; this._doGarlicTick(); }
         }
+
+        // Artoria: Espada doble golpe
+        if(cls==='artoria'){
+            this._timers.whip -= dt;
+            const effCD = 0.62 * reduce;
+            if(this._timers.whip<=0){
+                this._timers.whip = effCD;
+                this._doArtoriaSword();
+            }
+            if(this._whipFlash>0) this._whipFlash-=dt;
+        }
+        // Cu: Lanza lineal
+        if(cls==='cu'){
+            if(!this._timers.lance) this._timers.lance=0;
+            this._timers.lance -= dt;
+            const effCD = 0.58 * reduce;
+            if(this._timers.lance<=0){
+                this._timers.lance = effCD;
+                this._doLance();
+            }
+        }
+        // Emiya: Arco
+        if(cls==='emiya'){
+            if(!this._timers.bow) this._timers.bow=0;
+            this._timers.bow -= dt;
+            const effCD = 0.34 * reduce;
+            if(this._timers.bow<=0){
+                this._timers.bow = effCD;
+                const count = 1 + (p.stats.projectileCount|0);
+                const targets = nearest(count, 580);
+                if(targets.length===0){
+                    this._fireArrow(p.x + p.facing*160, p.y);
+                } else {
+                    for(let i=0;i<Math.min(targets.length,count);i++){
+                        this._fireArrow(targets[i].x, targets[i].y);
+                    }
+                }
+            }
+        }
         // tick definitiva (enfriamiento y activa)
         this._updateUltimate(dt);
         this._updateUltimateButton();
@@ -425,7 +475,6 @@ export class Game {
             this.audio.whip(); this.audio.shieldUp();
             this.spawnPickupText(this.player.x, this.player.y-28, 'CORTE DIVINO!', '#FFBE0B');
         } else if(cls==='mago'){
-            // Rayo: dirección al enemigo más cercano o hacia donde mira
             let dirX=this.player.facing, dirY=0;
             const nearest=this._findNearestForUltimate(700);
             if(nearest){
@@ -433,9 +482,32 @@ export class Game {
                 const len=Math.hypot(dx,dy)||1; dirX=dx/len; dirY=dy/len;
             }
             this.ultimateActive={type:'mago', timer:ult.duration, dirX, dirY, width:ult.width, length:ult.length, tickDamage:ult.tickDamage, tickRate:ult.tickRate, tick:0};
-            this._ultBeamPulse=0;
-            this.audio.fireballShoot(); this.audio.levelUp();
-            this.spawnPickupText(this.player.x, this.player.y-28, 'RAYO ANIQUILADOR!', '#A78BFA');
+        } else if(cls==='artoria'){
+            let dirX=this.player.facing, dirY=0;
+            const nearest=this._findNearestForUltimate(700);
+            if(nearest){ const dx=nearest.x-this.player.x, dy=nearest.y-this.player.y; const len=Math.hypot(dx,dy)||1; dirX=dx/len; dirY=dy/len; }
+            this.ultimateActive={type:'artoria', timer:ult.duration, dirX, dirY, width:ult.width, length:ult.length, tickDamage:ult.tickDamage, tickRate:ult.tickRate, tick:0};
+            // Texto EXCALIBUR!! pixel amarillo grande sobre la cabeza
+            this.spawnExcaliburText();
+            this.audio.levelUp(); this.audio.fireballShoot();
+        } else if(cls==='cu'){
+            // Gae Bolg: lanza hacia el más cercano, cae y explota
+            let tx=this.player.x + this.player.facing*520, ty=this.player.y;
+            const nearest=this._findNearestForUltimate(620);
+            if(nearest){ tx=nearest.x; ty=nearest.y; }
+            this.ultimateActive={type:'cu', timer:0.55, tx, ty, damage:ult.damage, explosion:ult.explosion};
+            // efecto inmediato: marca y luego explota
+            this._doUltimateCu(tx,ty, ult);
+            this.audio.fireballShoot(); this.audio.fireballExplode();
+            this.spawnPickupText(this.player.x, this.player.y-28, 'GAE BOLG!', '#F87171');
+            this._updateUltimateButton();
+            return;
+        } else if(cls==='emiya'){
+            this.ultimateActive={type:'emiya', timer:ult.duration, radius:ult.radius, tickDamage:ult.tickDamage, tickRate:ult.tickRate, tick:0};
+            this.audio.levelUp(); this.audio.shoot();
+            this.spawnPickupText(this.player.x, this.player.y-28, 'UNLIMITED BLADE WORKS!', '#D4D4D8');
+            this._updateUltimateButton();
+            return;
         } else if(cls==='picaro'){
             this.ultimateActive={type:'picaro', timer:ult.duration, interval:ult.interval, bombDamage:ult.bombDamage, bombRadius:ult.bombRadius, tick:0};
             this.audio.dagger(); this.audio.fireballExplode();
@@ -462,7 +534,7 @@ export class Game {
         const ult=this.ultimateActive;
         ult.timer-=dt;
         this._ultBeamPulse+=dt*8;
-        if(ult.type==='mago'){
+        if(ult.type==='mago' || ult.type==='artoria'){
             ult.tick-=dt;
             if(ult.tick<=0){
                 ult.tick=ult.tickRate;
@@ -474,6 +546,14 @@ export class Game {
                 ult.tick=ult.interval;
                 this._doUltimatePicaroTick(ult);
             }
+        } else if(ult.type==='emiya'){
+            ult.tick-=dt;
+            if(ult.tick<=0){
+                ult.tick=ult.tickRate;
+                this._doUltimateEmiyaTick(ult);
+            }
+        } else if(ult.type==='cu'){
+            // Gae Bolg ya explotó al activar, solo espera timer
         }
         if(ult.timer<=0){
             this.ultimateActive=null;
@@ -538,27 +618,70 @@ export class Game {
         const p=this.player;
         const dmg=Math.ceil(ult.bombDamage * p.stats.damageMultiplier);
         const radius=ult.bombRadius;
-        // 8 direcciones + random
-        const dirs=8;
         for(let i=0;i<1;i++){
             const ang = Math.random()*Math.PI*2;
             const dist = 38 + Math.random()*42;
             const bx = p.x + Math.cos(ang)*dist;
             const by = p.y + Math.sin(ang)*dist;
-            // bomba que cae y explota tras 0.22s
             this.ultimateBombs.push({x:bx,y:by, timer:0.22, damage:dmg, radius, life:0.45});
             this.spawnExplosion(bx,by,12,'#6EE7B7');
         }
-        // también bombas en círculo perfecto cada 2 ticks
         if(Math.floor(ult.timer*10)%3===0){
-            for(let k=0;k<dirs;k++){
-                const ang=k*(Math.PI*2/dirs) + this.elapsed*1.5;
+            for(let k=0;k<8;k++){
+                const ang=k*(Math.PI*2/8) + this.elapsed*1.5;
                 const bx=p.x + Math.cos(ang)*52;
                 const by=p.y + Math.sin(ang)*52;
                 this.ultimateBombs.push({x:bx,y:by, timer:0.18, damage:dmg, radius: radius*0.85, life:0.38});
             }
         }
         this.audio.dagger();
+    }
+    _doUltimateCu(tx,ty, ultCfg){
+        // lanza cae y explota
+        const p=this.player;
+        // marca en el suelo
+        this.spawnExplosion(tx,ty,18,'#F87171');
+        // retardo de 0.35s y explosión
+        setTimeout(()=>{
+            if(this.state!=='GAMEPLAY' || !this.player) return;
+            const dmg=Math.ceil(ultCfg.damage * p.stats.damageMultiplier);
+            const candidates=this.entityManager.grid.query(tx,ty,ultCfg.explosion);
+            for(const e of candidates){
+                if(e.type!=='enemy'||!e.alive) continue;
+                const dx=e.x-tx, dy=e.y-ty;
+                if(dx*dx+dy*dy < ultCfg.explosion*ultCfg.explosion){
+                    const dead=e.takeDamage(dmg);
+                    this.spawnDamageNumber(e.x,e.y-14, `${dmg}`, '#F87171');
+                    const len=Math.hypot(dx,dy)||1;
+                    e.applyKnockback(dx/len, dy/len, 88);
+                    if(dead){ this.kills++; if(Math.random()<0.9) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
+                    else this.audio.enemyHit();
+                }
+            }
+            this.spawnExplosion(tx,ty,ultCfg.explosion,'#991B1B');
+            this.audio.fireballExplode();
+        }, 360);
+    }
+    _doUltimateEmiyaTick(ult){
+        const p=this.player;
+        const dmg=Math.ceil(ult.tickDamage * p.stats.damageMultiplier);
+        const r=ult.radius;
+        const candidates=this.entityManager.grid.query(p.x,p.y,r);
+        let hits=0;
+        for(const e of candidates){
+            if(e.type!=='enemy'||!e.alive) continue;
+            const dx=e.x-p.x, dy=e.y-p.y;
+            if(dx*dx+dy*dy < r*r){
+                const dead=e.takeDamage(dmg);
+                if(hits<3) this.spawnDamageNumber(e.x,e.y-10, `${dmg}`, '#D4D4D8');
+                e.hitFlash=0.1;
+                // efecto de corte: pequeño empuje aleatorio
+                e.applyKnockback((Math.random()-0.5), (Math.random()-0.5), 12);
+                hits++;
+                if(dead){ this.kills++; if(Math.random()<0.75) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
+            }
+        }
+        if(hits>0 && Math.random()<0.25) this.audio.enemyHit();
     }
 
     _updateUltimateButton(){
@@ -582,10 +705,9 @@ export class Game {
                 }
                 btn.classList.toggle('cooldown', this.ultimateCooldown>0);
                 btn.classList.toggle('active', this.ultimateActive!==null);
-                // etiqueta según clase
                 const lab=btn.querySelector('.ult-label');
                 if(lab && this.player){
-                    const names={caballero:'CORTE', mago:'RAYO', picaro:'BOMBAS'};
+                    const names={caballero:'CORTE', mago:'RAYO', picaro:'BOMBAS', artoria:'EXCAL', cu:'GAE', emiya:'UBW'};
                     lab.textContent = names[this.player.classId]||'ULT';
                 }
             }
@@ -618,6 +740,65 @@ export class Game {
         const fb = new Fireball(p.x, p.y, tx, ty, speed, dmg, radius);
         this.entityManager.add(fb);
         this.audio.fireballShoot();
+    }
+    _fireArrow(tx,ty){
+        const p=this.player;
+        const dmg=Math.ceil(13 * p.stats.damageMultiplier * (Math.random()<p.stats.critChance? p.stats.critDamage:1));
+        const proj=new Projectile(p.x,p.y,tx,ty,560,dmg,5,'#D4D4D8');
+        proj.isCrit = Math.random()<p.stats.critChance;
+        proj.isArrow = true;
+        // flecha alargada: dirección
+        const ang=Math.atan2(ty-p.y, tx-p.x);
+        proj.angle=ang;
+        this.entityManager.add(proj);
+        this.audio.shoot();
+    }
+    _doArtoriaSword(){
+        // doble golpe en misma dirección
+        this._doWhip();
+        setTimeout(()=>{ if(this.state==='GAMEPLAY' && this.player && this.player.classId==='artoria') this._doWhip(); }, 95);
+    }
+    _doLance(){
+        const p=this.player;
+        const range=168, width=22;
+        const dmg=Math.ceil(26 * p.stats.damageMultiplier);
+        // dirección al más cercano o facing
+        let dirX=p.facing, dirY=0;
+        let nearest=null, bestD2=420*420;
+        for(const e of this.entityManager.enemies){
+            if(!e.alive) continue;
+            const d2=(e.x-p.x)**2+(e.y-p.y)**2;
+            if(d2<bestD2){ bestD2=d2; nearest=e; }
+        }
+        if(nearest){
+            const dx=nearest.x-p.x, dy=nearest.y-p.y; const len=Math.hypot(dx,dy)||1;
+            dirX=dx/len; dirY=dy/len;
+            p.facing = dirX>=0?1:-1;
+        }
+        this._lanceAngle=Math.atan2(dirY,dirX);
+        this._lanceFlash=0.18;
+        // daño en línea: rectángulo desde p hacia dir
+        const halfW=width/2;
+        const px=-dirY, py=dirX;
+        const candidates=this.entityManager.grid.query(p.x + dirX*range/2, p.y + dirY*range/2, range/2 + halfW + 14);
+        let hits=0;
+        for(const e of candidates){
+            if(e.type!=='enemy'||!e.alive) continue;
+            const ex=e.x-p.x, ey=e.y-p.y;
+            const proj=ex*dirX + ey*dirY;
+            if(proj<0||proj>range) continue;
+            const perp=Math.abs(ex*px + ey*py);
+            if(perp > halfW + e.radius) continue;
+            const isCrit=Math.random()<p.stats.critChance;
+            const finalDmg=Math.ceil(dmg * (isCrit? p.stats.critDamage:1));
+            const dead=e.takeDamage(finalDmg);
+            this.spawnDamageNumber(e.x,e.y-13, isCrit?`${finalDmg}!`:`${finalDmg}`, isCrit?'#FFBE0B':'#fff');
+            e.applyKnockback(dirX, dirY, 62);
+            hits++;
+            if(dead){ this.kills++; if(Math.random()<0.72) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
+            else this.audio.enemyHit();
+        }
+        if(hits>0) this.audio.whip();
     }
     _doWhip(){
         const p=this.player;
@@ -847,6 +1028,9 @@ export class Game {
             case 'garlic_up': p._garlicBonus = (p._garlicBonus||0)+20; if(p.stats.magnetRadius<140) p.stats.magnetRadius+=6; break;
             case 'shield_up': p.shieldMaxCharges = (p.shieldMaxCharges||1)+1; p._shieldCdBonus=(p._shieldCdBonus||0)+1.8; if(!p.shieldActive){ p.shieldCharges=p.shieldMaxCharges; p.shieldActive=true; } break;
             case 'fireball_up': p._fireballBonus.dmg = (p._fireballBonus.dmg||0)+10; p._fireballBonus.radius=(p._fireballBonus.radius||0)+14; p._fireballBonus.cd=(p._fireballBonus.cd||0)+0.22; break;
+            case 'artoria_up': p.stats.damageMultiplier+=0.12; p._artoriaBonus=(p._artoriaBonus||0)+4; break;
+            case 'cu_up': p.stats.damageMultiplier+=0.10; p._cuBonus=(p._cuBonus||0)+18; break;
+            case 'emiya_up': p.stats.projectileCount+=1; p._emiyaBonus=(p._emiyaBonus||0)+1; break;
         }
         this.audio.pickup();
         this.spawnPickupText(p.x, p.y-24, 'MEJORA!', '#ffbe0b');
@@ -969,8 +1153,34 @@ export class Game {
             ctx.fillStyle=`rgba(59,7,84,${0.22*alpha})`;
             ctx.beginPath(); ctx.arc(sxp + Math.cos(ang)*range*0.58, syp + Math.sin(ang)*range*0.58, 9, 0, Math.PI*2); ctx.fill();
         }
+        // Lanza roja Cu -- línea recta
+        if(this._lanceFlash>0 && this.player && this.player.classId==='cu'){
+            const p=this.player;
+            const sxp=p.x - cam.x, syp=p.y - cam.y;
+            const ang=this._lanceAngle || 0;
+            const range=168;
+            const alpha=this._lanceFlash / 0.18;
+            ctx.save();
+            ctx.translate(sxp, syp);
+            ctx.rotate(ang);
+            // asta
+            ctx.fillStyle=`rgba(153,27,27,${0.92*alpha})`;
+            ctx.fillRect(0, -3, range, 6);
+            ctx.fillStyle=`rgba(248,113,113,${0.95*alpha})`;
+            ctx.fillRect(0, -1, range, 2);
+            // punta
+            ctx.fillStyle='#000';
+            ctx.fillRect(range-2, -5, 10, 10);
+            ctx.fillStyle='#F87171';
+            ctx.beginPath(); ctx.moveTo(range+8, 0); ctx.lineTo(range-2, -5); ctx.lineTo(range-2, 5); ctx.closePath(); ctx.fill();
+            ctx.fillStyle='#FFFFFF';
+            ctx.beginPath(); ctx.moveTo(range+6, 0); ctx.lineTo(range-1, -2); ctx.lineTo(range-1, 2); ctx.closePath(); ctx.fill();
+            ctx.restore();
+            this._lanceFlash-=0.016;
+            if(this._lanceFlash<0) this._lanceFlash=0;
+        }
 
-        // Definitivas
+        // Definitivas (todas)
         if(this.ultimateActive){
             const ult=this.ultimateActive;
             const p=this.player; const sxp=p.x - cam.x, syp=p.y - cam.y;
@@ -984,28 +1194,63 @@ export class Game {
                 ctx.beginPath(); ctx.arc(sxp, syp, r, 0, Math.PI*2); ctx.stroke();
                 ctx.strokeStyle=`rgba(97,12,39,${alpha})`; ctx.lineWidth=2;
                 ctx.beginPath(); ctx.arc(sxp, syp, r*0.72, 0, Math.PI*2); ctx.stroke();
-            } else if(ult.type==='mago'){
+            } else if(ult.type==='mago' || ult.type==='artoria'){
                 const len=ult.length, halfW=ult.width/2;
                 const ang=Math.atan2(ult.dirY, ult.dirX);
                 const pulse = 0.75 + Math.sin(this._ultBeamPulse)*0.22;
+                const isArtoria = ult.type==='artoria';
                 ctx.save();
                 ctx.translate(sxp, syp);
                 ctx.rotate(ang);
-                // núcleo del rayo
-                ctx.fillStyle=`rgba(167,139,250,${0.42*pulse})`;
+                ctx.fillStyle=isArtoria?`rgba(255,190,11,${0.48*pulse})`:`rgba(167,139,250,${0.42*pulse})`;
                 ctx.fillRect(0, -halfW, len, halfW*2);
-                ctx.fillStyle=`rgba(255,255,255,${0.55*pulse})`;
+                ctx.fillStyle=isArtoria?`rgba(255,255,255,${0.62*pulse})`:`rgba(255,255,255,${0.55*pulse})`;
                 ctx.fillRect(0, -halfW*0.38, len, halfW*0.76);
-                // borde
-                ctx.strokeStyle=`rgba(59,7,84,${0.65*pulse})`; ctx.lineWidth=2;
+                ctx.strokeStyle=isArtoria?`rgba(255,190,11,${0.75*pulse})`:`rgba(59,7,84,${0.65*pulse})`; ctx.lineWidth=2;
                 ctx.strokeRect(0, -halfW, len, halfW*2);
-                // chispas en la punta
                 ctx.fillStyle=`rgba(255,190,11,${0.85*pulse})`;
                 ctx.fillRect(len-10, -halfW-2, 10, halfW*2+4);
                 ctx.restore();
+            } else if(ult.type==='cu' && ult.tx!==undefined){
+                const sx=ult.tx - cam.x, sy=ult.ty - cam.y;
+                const pulse = 0.55 + Math.sin(this._ultBeamPulse*1.6)*0.4;
+                const prog = 1 - (ult.timer/0.55);
+                // onda expansiva roja que crece
+                ctx.fillStyle=`rgba(185,28,28,${0.28*pulse})`;
+                ctx.beginPath(); ctx.arc(sx, sy, 72 + prog*28, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle=`rgba(153,27,27,${0.18*pulse})`;
+                ctx.beginPath(); ctx.arc(sx, sy, 48 + prog*18, 0, Math.PI*2); ctx.fill();
+                ctx.strokeStyle=`rgba(248,113,113,${0.95*pulse})`; ctx.lineWidth=3; ctx.setLineDash([8,5]);
+                ctx.beginPath(); ctx.arc(sx, sy, 30 + Math.sin(this._ultBeamPulse)*6, 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+                ctx.strokeStyle=`rgba(255,255,255,${0.55*pulse})`; ctx.lineWidth=1.5;
+                ctx.beginPath(); ctx.arc(sx, sy, 18, 0, Math.PI*2); ctx.stroke();
+                // lanza gigante vertical
+                ctx.fillStyle='#000'; ctx.fillRect(sx-3, sy-38, 6, 38);
+                ctx.fillStyle='#991B1B'; ctx.fillRect(sx-2, sy-36, 4, 34);
+                ctx.fillStyle='#F87171'; ctx.beginPath(); ctx.moveTo(sx, sy-42); ctx.lineTo(sx-9, sy-22); ctx.lineTo(sx+9, sy-22); ctx.closePath(); ctx.fill();
+                ctx.fillStyle='#FFFFFF'; ctx.beginPath(); ctx.moveTo(sx, sy-40); ctx.lineTo(sx-4, sy-26); ctx.lineTo(sx+4, sy-26); ctx.closePath(); ctx.fill();
+                // destello en el suelo
+                ctx.fillStyle=`rgba(248,113,113,${0.42*pulse})`;
+                ctx.fillRect(sx-14, sy+8, 28, 4);
+            } else if(ult.type==='emiya'){
+                const r=ult.radius;
+                const pulse = 0.82 + Math.sin(this._ultBeamPulse*0.9)*0.16;
+                ctx.fillStyle=`rgba(194,178,128,${0.18*pulse})`;
+                ctx.beginPath(); ctx.arc(sxp, syp, r*pulse, 0, Math.PI*2); ctx.fill();
+                ctx.strokeStyle=`rgba(212,212,216,${0.42*pulse})`; ctx.lineWidth=2; ctx.setLineDash([5,5]);
+                ctx.beginPath(); ctx.arc(sxp, syp, r, 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+                ctx.strokeStyle=`rgba(153,27,27,${0.55*pulse})`; ctx.lineWidth=1.2;
+                for(let k=0;k<10;k++){
+                    const ang=k*(Math.PI*2/10) + this.elapsed*0.6;
+                    const rx=sxp + Math.cos(ang)*r*0.72;
+                    const ry=syp + Math.sin(ang)*r*0.72;
+                    ctx.beginPath(); ctx.moveTo(rx, ry-8); ctx.lineTo(rx, ry+8); ctx.stroke();
+                    ctx.fillStyle=`rgba(212,212,216,${0.9*pulse})`;
+                    ctx.fillRect(rx-1, ry-10, 2, 6);
+                }
             }
         }
-        // Bombas de la definitiva del pícaro (antes de explotar)
+        // Bombas de la definitiva del pícaro/cu (antes de explotar)
         for(const b of this.ultimateBombs){
             if(b.exploded) continue;
             const sx=b.x - cam.x, sy=b.y - cam.y;
@@ -1022,13 +1267,25 @@ export class Game {
             ctx.fillRect(sx-3, sy-3, 2, 2);
         }
 
-        // Floating texts
+        // Floating texts — Excalibur grande pixel
         for(const t of this.floatingTexts){
             const sx=t.x - cam.x, sy=t.y - cam.y;
             const alpha=t.life / t.maxLife;
             ctx.globalAlpha=alpha;
-            ctx.fillStyle=t.color; ctx.font='bold 13px JetBrains Mono, monospace'; ctx.textAlign='center';
-            ctx.fillText(t.text, sx, sy);
+            if(t.isExcalibur){
+                ctx.fillStyle='#000';
+                ctx.font='bold 18px \"Press Start 2P\", monospace'; ctx.textAlign='center';
+                ctx.fillText(t.text, sx+2, sy+2);
+                ctx.fillStyle=t.color; ctx.font='bold 18px \"Press Start 2P\", monospace';
+                ctx.fillText(t.text, sx, sy);
+                // brillo
+                ctx.fillStyle='rgba(255,255,255,0.55)';
+                ctx.fillRect(sx - 42, sy - 16, 84, 2);
+            } else {
+                const scale=t.scale||1;
+                ctx.fillStyle=t.color; ctx.font=`bold ${Math.round(13*scale)}px JetBrains Mono, monospace`; ctx.textAlign='center';
+                ctx.fillText(t.text, sx, sy);
+            }
         }
         ctx.globalAlpha=1;
 
