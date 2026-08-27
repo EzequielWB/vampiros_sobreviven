@@ -8,6 +8,9 @@ import { SPRITES, drawPixelSprite } from '../pixelSprites.js';
 export class Enemy {
     constructor(x, y, typeId = 'grunt', scaledStats = null) {
         this.type = 'enemy';
+        this.reset(x,y,typeId,scaledStats);
+    }
+    reset(x, y, typeId = 'grunt', scaledStats = null){
         this.x = x; this.y = y;
         this.enemyType = typeId;
         const def = CONFIG.ENEMY.TYPES[typeId] || CONFIG.ENEMY.TYPES.grunt;
@@ -15,21 +18,21 @@ export class Enemy {
         this.radius = def.radius;
         this.alive = true;
         this.isRanged = !!def.ranged;
-
         const s = scaledStats || { hp: CONFIG.ENEMY.BASE_HP, damage: CONFIG.ENEMY.BASE_DAMAGE, speed: CONFIG.ENEMY.BASE_SPEED };
         this.maxHp = Math.floor(s.hp * def.hpMul);
         this.hp = this.maxHp;
         this.damage = Math.max(2, Math.floor(s.damage * def.dmgMul));
         this.speed = Math.min(CONFIG.ENEMY.SCALING.maxSpeed, s.speed * def.spdMul) * (0.94 + Math.random()*0.12);
-
         this.emoji = def.emoji;
         this.color = def.color;
         this.xpValue = def.xp || 12;
-
         this.hitFlash = 0;
         this.stun = 0;
         this.shootTimer = def.ranged ? (0.4 + Math.random()*0.8) : 0;
         this.wobble = Math.random()*Math.PI*2;
+        // limpiar grid keys
+        this._gridKey = null; this._gridCol=0; this._gridRow=0;
+        return this;
     }
 
     update(dt, game) {

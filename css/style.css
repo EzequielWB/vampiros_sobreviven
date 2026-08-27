@@ -129,10 +129,12 @@ body::before{
 .hidden{opacity:0 !important;pointer-events:none !important}
 .screen-content{width:min(960px,94%);text-align:center;padding:20px 18px; max-height:90vh; overflow-y:auto}
 @media (max-width: 860px){
-  .ui-screen{ align-items:flex-start; padding:10px 0; }
+  .ui-screen{ align-items:flex-start; padding:10px 0; overflow-y:auto; touch-action:pan-y; -webkit-overflow-scrolling:touch; }
   .screen-content{ max-height:none; overflow:visible; padding:16px 12px; width:96%; }
   body{ overflow:auto; align-items:flex-start; padding:0; }
   html{ overflow:auto; }
+  #game-container{ touch-action:pan-y; }
+  #game-container.gameplay{ touch-action:none; }
 }
 
 /* Títulos pixel gótico */
@@ -515,7 +517,46 @@ body::before{
   text-shadow:1px 1px 0 #000;
 }
 .side-notice span{ display:block; }
+.side-notice.hidden{ opacity:0; pointer-events:none; }
+/* Botón definitiva */
+.ultimate-btn{
+  position:absolute;
+  right:14px; bottom:14px;
+  width:78px; height:78px;
+  background:#FFBE0B;
+  border:3px solid #000;
+  box-shadow:4px 4px 0 #000;
+  color:#000;
+  font-family:'Press Start 2P',monospace;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:2px;
+  z-index:6;
+  pointer-events:all;
+  touch-action:manipulation;
+  image-rendering:pixelated;
+  overflow:hidden;
+}
+.ultimate-btn.hidden{ opacity:0; pointer-events:none; }
+.ultimate-btn .ult-icon{
+  width:28px; height:28px;
+  background:#000; color:#FFBE0B;
+  display:flex; align-items:center; justify-content:center;
+  font-size:16px; line-height:1;
+  border:2px solid #000;
+  box-shadow:1px 1px 0 #000;
+}
+.ultimate-btn .ult-label{ font-size:8px; letter-spacing:0.06em; }
+.ultimate-btn .ult-cooldown{ font-size:9px; color:#610C27; }
+.ultimate-btn.cooldown{ filter:grayscale(0.7) brightness(0.85); pointer-events:none; }
+.ultimate-btn .ult-fill{
+  position:absolute; left:0; bottom:0; width:100%; height:0%;
+  background:rgba(0,0,0,0.32);
+  pointer-events:none;
+  transition:height 0.1s linear;
+}
+.ultimate-btn.active{ background:#FFD54F; box-shadow:4px 4px 0 #000, 0 0 12px rgba(255,190,11,0.5); }
 @media (max-width: 860px){
+  .ultimate-btn{ width:72px; height:72px; right:10px; bottom:10px; }
   .side-notice{
     right:0;
     top:auto; bottom:38%;
@@ -535,17 +576,6 @@ body::before{
   .joystick{ width:130px; height:130px; left:10px; bottom:10px; }
   .joystick .stick{ width:52px; height:52px; }
   #game-container{ border-width:3px; }
-  #game-container.menu-mode{
-    height:auto;
-    aspect-ratio:auto;
-    min-height:100dvh;
-    max-height:none;
-    width:98vw;
-    overflow:visible;
-  }
-  #game-container.menu-mode #gameCanvas{ display:none; }
-  #game-container.menu-mode .ui-screen{ position:relative; inset:auto; min-height:100dvh; height:auto; }
-  #game-container.menu-mode .screen-content{ max-height:none; overflow:visible; }
 }
 .touch-hint{
   position:absolute;

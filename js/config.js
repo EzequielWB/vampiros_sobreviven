@@ -74,6 +74,8 @@ export const CONFIG = Object.freeze({
         BASE_COUNT: 3,
         COUNT_PER_MINUTE: 1.7,
         MAX_PER_WAVE: 18,
+        MAX_ENEMIES: 380,
+        MAX_ENEMIES_MOBILE: 220,
         MIX: [
             { minute: 0, grunt: 0.85, tank: 0.05, runner: 0.10, shooter: 0.00 },
             { minute: 1, grunt: 0.65, tank: 0.10, runner: 0.20, shooter: 0.05 },
@@ -96,6 +98,12 @@ export const CONFIG = Object.freeze({
         GARLIC:   { id:'garlic',   name:'Aura de Ajo',      emoji:'[GAR]', cooldown: 0.22, damage: 7,  radius: 75,  behavior: 'aoe_constant', exclusive: 'picaro' },
         SHIELD:   { id:'shield',   name:'Escudo Sagrado',   emoji:'[SHD]', cooldown: 11, charges: 1, radius: 32, behavior: 'shield_block', exclusive: 'caballero' },
         FIREBALL: { id:'fireball', name:'Bola de Fuego',    emoji:'[FIR]', cooldown: 3.4, damage: 34, speed: 285, radius: 14, explosion: 72, behavior: 'explosive', exclusive: 'mago' }
+    },
+
+    ULTIMATES: {
+        caballero: { id:'ult_cab', name:'Corte Divino',   emoji:'[SWD]', cooldown:30, duration:0.45, range:220, damage:88, arc: Math.PI*2, knockback:110 },
+        mago:      { id:'ult_mag', name:'Rayo Aniquilador', emoji:'[RAY]', cooldown:30, duration:3,   width:44, length:760, tickDamage:16, tickRate:0.08 },
+        picaro:    { id:'ult_pic', name:'Lluvia de Bombas', emoji:'[BMB]', cooldown:30, duration:3,   interval:0.16, bombDamage:26, bombRadius:54, bombsPerTick:1 }
     },
 
     UPGRADES_POOL: [

@@ -6,6 +6,7 @@
  */
 import { SpatialGrid } from './spatialGrid.js';
 import { dist2 } from './utils.js';
+import { Enemy } from './entities/enemy.js';
 
 export class EntityManager {
     constructor(cellSize = 80) {
@@ -16,9 +17,27 @@ export class EntityManager {
         this.enemyProjectiles = [];
         this.gems = [];
         this.player = null;
-        // Stats colisiones
+        this.enemyPool = [];
+        this.maxPool = 80;
+        this._frame = 0;
         this.collisionChecks = 0;
-        this.bruteForceChecks = 0; // cuánto nos ahorramos
+        this.bruteForceChecks = 0;
+    }
+    acquireEnemy(x,y,typeId,scaled){
+        let e = this.enemyPool.pop();
+        if(e){
+            e.reset(x,y,typeId,scaled);
+        } else {
+            e = new Enemy(x,y,typeId,scaled);
+        }
+        this.add(e);
+        return e;
+    }
+    releaseToPool(e){
+        if(this.enemyPool.length < this.maxPool){
+            e._gridKey=null;
+            this.enemyPool.push(e);
+        }
     }
 
     setPlayer(player) {
@@ -38,14 +57,14 @@ export class EntityManager {
 
     _gc() {
         const alive = (e) => e.alive !== false;
+        // pool enemigos muertos (evita GC spikes con 500+)
+        const dead = this.enemies.filter(e=>!alive(e));
+        for(const e of dead) this.releaseToPool(e);
         this.entities = this.entities.filter(alive);
         this.enemies = this.enemies.filter(alive);
         this.projectiles = this.projectiles.filter(alive);
         this.enemyProjectiles = this.enemyProjectiles.filter(alive);
         this.gems = this.gems.filter(alive);
-        if (this.player && !this.player.alive) {
-            // mantener referencia para game over, pero no en entities si murió? lo dejamos
-        }
     }
 
     rebuildGrid() { this.grid.rebuild(this.entities); }
@@ -125,33 +144,24 @@ export class EntityManager {
             }
         }
 
-        // 2) Proyectiles vs Enemigos -- PASO 4 preview (sin daño aún, solo conteo)
-        // Cada proyectil query a su radio
-        for (const proj of this.projectiles) {
-            if (!proj.alive) continue;
-            const candidates = this.grid.query(proj.x, proj.y, 24);
-            for (const e of candidates) {
-                if (e.type !== 'enemy' || !e.alive) continue;
-                this.collisionChecks++;
-                const r = (proj.radius || 6) + e.radius;
-                if (dist2(proj.x, proj.y, e.x, e.y) < r * r) {
-                    // En PASO 4: e.takeDamage(proj.damage); proj.alive=false; spawnea gem
-                    // Aquí solo detectamos para métrica
-                }
-            }
-        }
-
-        // Brute force estimate
+        // (Proyectiles vs Enemigos se maneja en Game._handleProjectileCollisions con daño real — se omite aquí para no duplicar checks)
         this.bruteForceChecks = this.enemies.length * (this.enemies.length - 1) / 2 + this.enemies.length;
 
         return { checks: this.collisionChecks, hits, brute: this.bruteForceChecks };
     }
 
-    /** Separación leve entre enemigos para evitar stacking -- usa Grid */
-    separateEnemies() {
+    separateEnemies(game) {
+        // LOD: solo cada 2 frames y solo cerca del jugador (400px) para no quemar CPU con 500+ enemigos
+        if((this._frame & 1) === 1) return;
+        const px = game?.player?.x, py = game?.player?.y;
+        const hasPlayer = px !== undefined;
         for (const e of this.enemies) {
             if (!e.alive) continue;
-            const neighbors = this.grid.query(e.x, e.y, e.radius * 2.2);
+            if(hasPlayer){
+                const dxp = e.x - px, dyp = e.y - py;
+                if(dxp*dxp + dyp*dyp > 500*500) continue; // lejos, no separar
+            }
+            const neighbors = this.grid.query(e.x, e.y, e.radius * 2.1);
             for (const other of neighbors) {
                 if (other === e || other.type !== 'enemy' || !other.alive) continue;
                 const dx = e.x - other.x, dy = e.y - other.y;
@@ -159,7 +169,7 @@ export class EntityManager {
                 const minDist = e.radius + other.radius;
                 if (d2 < minDist*minDist && d2 > 0.01) {
                     const d = Math.sqrt(d2);
-                    const overlap = (minDist - d) * 0.5;
+                    const overlap = (minDist - d) * 0.45;
                     const nx = dx / d, ny = dy / d;
                     e.x += nx * overlap * 0.5;
                     e.y += ny * overlap * 0.5;
@@ -171,25 +181,23 @@ export class EntityManager {
     }
 
     update(dt, game) {
-        // 1) Update entidades
+        this._frame++;
+        // 1) Update entidades con LOD: enemigos lejos (>700px) se actualizan cada 3 frames
+        const px = game?.player?.x, py = game?.player?.y;
         for (const e of this.entities) {
-            if (e.alive !== false && typeof e.update === 'function') {
-                e.update(dt, game);
+            if (e.alive === false || typeof e.update !== 'function') continue;
+            if(e.type==='enemy' && px!==undefined){
+                const dx=e.x-px, dy=e.y-py;
+                const d2=dx*dx+dy*dy;
+                if(d2 > 700*700 && (this._frame % 3) !== 0) continue; // LOD lejos
+                if(d2 > 1100*1100) continue; // muy lejos, no mover hasta que se acerque la cámara
             }
+            e.update(dt, game);
         }
-
-        // 2) Rebuild grid O(n) -- CRÍTICO antes de colisiones
         this.rebuildGrid();
-
-        // 3) Separación (opcional, barato con grid)
-        if (this.enemies.length > 0) this.separateEnemies();
-
-        // 4) Colisiones eficientes
+        if (this.enemies.length > 0) this.separateEnemies(game);
         this.handleCollisions(game);
-
-        // 5) GC
         this._gc();
-        // Nota: grid queda con datos del frame actual para render debug; se reconstruye al próximo update
     }
 
     render(ctx, camera) {

@@ -43,14 +43,23 @@ export class Game {
         this.player = null;
 
         this.floatingTexts = [];
-        this.explosions = []; // {x,y,r,life,maxLife}
-        this.shieldBreaks = []; // {x,y,life}
-        // Timers de armas por clase (automáticas) -- técnicas exclusivas
+        this.explosions = [];
+        this.shieldBreaks = [];
         this._timers = { whip: 0, wand: 0, dagger: 0, garlic: 0, shield: 0, fireball: 0 };
         this._whipFlash = 0;
         this._whipAngle = 0;
         this._garlicPulse = 0;
         this._shieldPulse = 0;
+        this._gridPattern = null;
+        this._gridPatternCanvas = null;
+        this.fps = 60;
+        this._fpsAcc = 0; this._fpsCount = 0; this._lastFpsTime = 0;
+        this._quality = 'high';
+        // Definitiva
+        this.ultimateCooldown = 0;
+        this.ultimateActive = null; // {type, timer, dirX, dirY, tick}
+        this.ultimateBombs = []; // para picaro: bombas en vuelo
+        this._ultBeamPulse = 0;
 
         this.loop = this.loop.bind(this);
         this._onResize = this._onResize.bind(this);
@@ -66,8 +75,12 @@ export class Game {
         window.addEventListener('resize', this._onResize);
         window.addEventListener('keydown', this._onKeyDown);
         window.addEventListener('mousedown', this._onPointerDown);
-        // touch para audio resume
         window.addEventListener('touchstart', () => this.audio.resume(), { once: true });
+        // botón definitiva
+        document.getElementById('ultimate-btn')?.addEventListener('click', ()=>this.tryActivateUltimate());
+        document.getElementById('ultimate-btn')?.addEventListener('touchstart', (e)=>{ e.preventDefault(); this.tryActivateUltimate(); }, {passive:false});
+        // tecla R para definitiva en PC
+        window.addEventListener('keydown', (e)=>{ if(e.key.toLowerCase()==='r') this.tryActivateUltimate(); });
 
         this.setState(GameState.MENU);
         this._lastTime = performance.now();
@@ -96,7 +109,24 @@ export class Game {
         this.logicalHeight = isMobile ? 540 : CONFIG.CANVAS.HEIGHT;
         this.camera.w = this.logicalWidth;
         this.camera.h = this.logicalHeight;
-        this.camera.h = this.logicalHeight;
+        this._gridPattern = null;
+    }
+    _ensureGridPattern(){
+        if(this._gridPattern) return this._gridPattern;
+        const s = 64;
+        const c = document.createElement('canvas');
+        c.width = s; c.height = s;
+        const g = c.getContext('2d');
+        g.fillStyle = CONFIG.COLORS.background;
+        g.fillRect(0,0,s,s);
+        g.strokeStyle = CONFIG.COLORS.grid;
+        g.lineWidth = 1;
+        g.strokeRect(0,0,s,s);
+        g.strokeStyle = 'rgba(0,0,0,0.08)';
+        g.strokeRect(0,0,s,s);
+        this._gridPatternCanvas = c;
+        this._gridPattern = this.ctx.createPattern(c, 'repeat');
+        return this._gridPattern;
     }
 
     _onResize() {
@@ -163,13 +193,16 @@ export class Game {
         if (newState === GameState.PAUSED) this.audio.pause();
         const wantJoy = (newState === GameState.GAMEPLAY);
         this.input.setJoystickVisible?.(wantJoy);
-        const container = document.getElementById('game-container');
-        if(container){
-            const isMenu = (newState===GameState.MENU || newState===GameState.CLASS_SELECT);
-            container.classList.toggle('menu-mode', isMenu && window.innerWidth < 860);
-        }
         document.body.classList.toggle('gameplay', wantJoy);
         document.body.classList.toggle('menu', !wantJoy);
+        // side notice solo en menú
+        const side=document.getElementById('side-notice');
+        if(side){
+            const isMenu = (newState===GameState.MENU || newState===GameState.CLASS_SELECT);
+            side.classList.toggle('hidden', !isMenu);
+        }
+        // ultimate button solo en gameplay
+        this._updateUltimateButton();
     }
 
     startGame(classId = 'caballero') {
@@ -214,7 +247,12 @@ export class Game {
         this.camera.y = Math.max(0, Math.min(this.camera.y, this.worldHeight - this.logicalHeight));
     }
 
-    spawnDamageNumber(x,y,text,color='#fff'){ this.floatingTexts.push({x,y,vy:-44,life:0.75,maxLife:0.75,text,color}); }
+    spawnDamageNumber(x,y,text,color='#fff'){
+        if(this.floatingTexts.length > 18) this.floatingTexts.shift();
+        // cap de daño flotante en mobile para no saturar
+        if(window.innerWidth < 860 && this.floatingTexts.length > 10) return;
+        this.floatingTexts.push({x,y,vy:-44,life:0.75,maxLife:0.75,text,color});
+    }
     spawnPickupText(x,y,text,color){ this.spawnDamageNumber(x,y,text,color); }
     spawnGemBurst(x,y,count=3){
         for(let i=0;i<count;i++){ const ang=Math.random()*Math.PI*2, r=18+Math.random()*26; this.entityManager.add(new Gem(x+Math.cos(ang)*r, y+Math.sin(ang)*r)); }
@@ -232,19 +270,26 @@ export class Game {
     }
 
     _stressTest(n=120){
+        const isMobile = window.innerWidth < 860;
+        const maxEnemies = isMobile ? CONFIG.WAVE.MAX_ENEMIES_MOBILE : CONFIG.WAVE.MAX_ENEMIES;
+        const cur = this.entityManager.enemyCount();
+        const canSpawn = Math.max(0, maxEnemies - cur);
+        const actual = Math.min(n, Math.floor(canSpawn * 0.7));
+        if(actual<=0){ this.spawnDamageNumber(this.player.x, this.player.y-32, `LIMITE ${maxEnemies}`, '#F43F5E'); return; }
         const scaled=this.waveDirector.getScaledStats(this.elapsed);
         const cam=this.camera;
         const types=['grunt','tank','runner','shooter'];
-        for(let i=0;i<n;i++){
+        for(let i=0;i<actual;i++){
             const side=Math.floor(Math.random()*4); let x,y; const m=32;
             if(side===0){ x=cam.x+Math.random()*cam.w; y=cam.y-m; }
             else if(side===1){ x=cam.x+cam.w+m; y=cam.y+Math.random()*cam.h; }
             else if(side===2){ x=cam.x+Math.random()*cam.w; y=cam.y+cam.h+m; }
             else { x=cam.x-m; y=cam.y+Math.random()*cam.h; }
             const t = types[Math.floor(Math.random()*types.length)];
-            this.entityManager.add(new Enemy(x,y,t,scaled));
+            if(this.entityManager.acquireEnemy) this.entityManager.acquireEnemy(x,y,t,scaled);
+            else this.entityManager.add(new Enemy(x,y,t,scaled));
         }
-        this.spawnDamageNumber(this.player.x, this.player.y-42, `+${n} ENEMIGOS`, '#ffbe0b');
+        this.spawnDamageNumber(this.player.x, this.player.y-42, `+${actual} ENEMIGOS`, '#FFBE0B');
     }
 
     // --- Armas automáticas por clase (PASO 3 preview, PASO 4 completo) ---
@@ -352,9 +397,199 @@ export class Game {
                 this._doGarlicTick();
             }
         } else if(p.weapons.includes('garlic')){
-            // caso genérico (por upgrades futuros)
             this._timers.garlic -= dt;
             if(this._timers.garlic<=0){ this._timers.garlic=0.32; this._doGarlicTick(); }
+        }
+        // tick definitiva (enfriamiento y activa)
+        this._updateUltimate(dt);
+        this._updateUltimateButton();
+    }
+
+    tryActivateUltimate(){
+        if(this.state!=='GAMEPLAY' || !this.player) return;
+        if(this.ultimateCooldown > 0) {
+            this.spawnPickupText(this.player.x, this.player.y-18, `CD ${Math.ceil(this.ultimateCooldown)}s`, '#94A3B8');
+            this.audio.pause();
+            return;
+        }
+        if(this.ultimateActive) return;
+        const cls=this.player.classId;
+        const ult=CONFIG.ULTIMATES[cls];
+        if(!ult) return;
+        this.audio.resume();
+        this.ultimateCooldown = ult.cooldown;
+        // activar según clase
+        if(cls==='caballero'){
+            // Corte 360 doble rango
+            this.ultimateActive={type:'caballero', timer:ult.duration, range:ult.range, damage:ult.damage};
+            this._doUltimateCaballero();
+            this.audio.whip(); this.audio.shieldUp();
+            this.spawnPickupText(this.player.x, this.player.y-28, 'CORTE DIVINO!', '#FFBE0B');
+        } else if(cls==='mago'){
+            // Rayo: dirección al enemigo más cercano o hacia donde mira
+            let dirX=this.player.facing, dirY=0;
+            const nearest=this._findNearestForUltimate(700);
+            if(nearest){
+                const dx=nearest.x-this.player.x, dy=nearest.y-this.player.y;
+                const len=Math.hypot(dx,dy)||1; dirX=dx/len; dirY=dy/len;
+            }
+            this.ultimateActive={type:'mago', timer:ult.duration, dirX, dirY, width:ult.width, length:ult.length, tickDamage:ult.tickDamage, tickRate:ult.tickRate, tick:0};
+            this._ultBeamPulse=0;
+            this.audio.fireballShoot(); this.audio.levelUp();
+            this.spawnPickupText(this.player.x, this.player.y-28, 'RAYO ANIQUILADOR!', '#A78BFA');
+        } else if(cls==='picaro'){
+            this.ultimateActive={type:'picaro', timer:ult.duration, interval:ult.interval, bombDamage:ult.bombDamage, bombRadius:ult.bombRadius, tick:0};
+            this.audio.dagger(); this.audio.fireballExplode();
+            this.spawnPickupText(this.player.x, this.player.y-28, 'LLUVIA DE BOMBAS!', '#6EE7B7');
+        }
+        this._updateUltimateButton();
+    }
+
+    _findNearestForUltimate(range=700){
+        const p=this.player;
+        let best=null, bestD2=range*range;
+        for(const e of this.entityManager.enemies){
+            if(!e.alive) continue;
+            const d2=(e.x-p.x)**2+(e.y-p.y)**2;
+            if(d2<bestD2){ bestD2=d2; best=e; }
+        }
+        return best;
+    }
+
+    _updateUltimate(dt){
+        if(this.ultimateCooldown>0) this.ultimateCooldown-=dt;
+        if(this.ultimateCooldown<0) this.ultimateCooldown=0;
+        if(!this.ultimateActive) return;
+        const ult=this.ultimateActive;
+        ult.timer-=dt;
+        this._ultBeamPulse+=dt*8;
+        if(ult.type==='mago'){
+            ult.tick-=dt;
+            if(ult.tick<=0){
+                ult.tick=ult.tickRate;
+                this._doUltimateMagoTick(ult);
+            }
+        } else if(ult.type==='picaro'){
+            ult.tick-=dt;
+            if(ult.tick<=0){
+                ult.tick=ult.interval;
+                this._doUltimatePicaroTick(ult);
+            }
+        }
+        if(ult.timer<=0){
+            this.ultimateActive=null;
+            this._ultBeamPulse=0;
+        }
+    }
+
+    _doUltimateCaballero(){
+        const p=this.player;
+        const ult=CONFIG.ULTIMATES.caballero;
+        const range=ult.range;
+        const dmg=Math.ceil(ult.damage * p.stats.damageMultiplier);
+        const candidates=this.entityManager.grid.query(p.x,p.y,range+4);
+        let hits=0;
+        for(const e of candidates){
+            if(e.type!=='enemy'||!e.alive) continue;
+            const dx=e.x-p.x, dy=e.y-p.y;
+            if(dx*dx+dy*dy > range*range) continue;
+            const dead=e.takeDamage(dmg);
+            this.spawnDamageNumber(e.x,e.y-14, `${dmg}`, '#FFBE0B');
+            const len=Math.hypot(dx,dy)||1;
+            e.applyKnockback(dx/len, dy/len, ult.knockback||110);
+            hits++;
+            if(dead){ this.kills++; if(Math.random()<0.85) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
+            else this.audio.enemyHit();
+        }
+        // onda expansiva visual
+        this.spawnExplosion(p.x,p.y,range,'#FFBE0B');
+        this._whipFlash=0.35; this._whipAngle=0;
+        // feedback
+        if(hits>0) this.audio.fireballExplode();
+    }
+
+    _doUltimateMagoTick(ult){
+        const p=this.player;
+        const ox=p.x, oy=p.y;
+        const dx=ult.dirX, dy=ult.dirY;
+        // línea: proyectar cada enemigo y ver si está dentro del rectángulo del rayo
+        const len=ult.length, halfW=ult.width/2;
+        // vector perpendicular
+        const px=-dy, py=dx;
+        let hits=0;
+        const candidates=this.entityManager.grid.query(ox + dx*len/2, oy + dy*len/2, len/2 + halfW);
+        for(const e of candidates){
+            if(e.type!=='enemy'||!e.alive) continue;
+            const ex=e.x-ox, ey=e.y-oy;
+            const proj = ex*dx + ey*dy; // proyección sobre dirección
+            if(proj < 0 || proj > len) continue;
+            const perp = Math.abs(ex*px + ey*py);
+            if(perp > halfW + e.radius) continue;
+            const dmg=Math.ceil(ult.tickDamage * p.stats.damageMultiplier);
+            const dead=e.takeDamage(dmg);
+            if(hits<4) this.spawnDamageNumber(e.x,e.y-10, `${dmg}`, '#A78BFA');
+            e.hitFlash=0.12;
+            hits++;
+            if(dead){ this.kills++; if(Math.random()<0.9) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
+        }
+        if(hits>0 && Math.random()<0.3) this.audio.enemyHit();
+    }
+
+    _doUltimatePicaroTick(ult){
+        const p=this.player;
+        const dmg=Math.ceil(ult.bombDamage * p.stats.damageMultiplier);
+        const radius=ult.bombRadius;
+        // 8 direcciones + random
+        const dirs=8;
+        for(let i=0;i<1;i++){
+            const ang = Math.random()*Math.PI*2;
+            const dist = 38 + Math.random()*42;
+            const bx = p.x + Math.cos(ang)*dist;
+            const by = p.y + Math.sin(ang)*dist;
+            // bomba que cae y explota tras 0.22s
+            this.ultimateBombs.push({x:bx,y:by, timer:0.22, damage:dmg, radius, life:0.45});
+            this.spawnExplosion(bx,by,12,'#6EE7B7');
+        }
+        // también bombas en círculo perfecto cada 2 ticks
+        if(Math.floor(ult.timer*10)%3===0){
+            for(let k=0;k<dirs;k++){
+                const ang=k*(Math.PI*2/dirs) + this.elapsed*1.5;
+                const bx=p.x + Math.cos(ang)*52;
+                const by=p.y + Math.sin(ang)*52;
+                this.ultimateBombs.push({x:bx,y:by, timer:0.18, damage:dmg, radius: radius*0.85, life:0.38});
+            }
+        }
+        this.audio.dagger();
+    }
+
+    _updateUltimateButton(){
+        const btn=document.getElementById('ultimate-btn');
+        const side=document.getElementById('side-notice');
+        if(btn){
+            const isMenu = (this.state===GameState.MENU || this.state===GameState.CLASS_SELECT);
+            const inGame = (this.state===GameState.GAMEPLAY);
+            // side notice solo en menú
+            if(side) side.classList.toggle('hidden', !isMenu);
+            // botón solo en gameplay
+            btn.classList.toggle('hidden', !inGame);
+            if(inGame){
+                const cd=Math.ceil(this.ultimateCooldown);
+                const fill=btn.querySelector('.ult-fill');
+                const label=btn.querySelector('.ult-cooldown');
+                if(label) label.textContent = cd>0 ? `${cd}` : 'LISTO';
+                if(fill){
+                    const pct = this.ultimateCooldown>0 ? (this.ultimateCooldown/30*100) : 0;
+                    fill.style.height = `${pct}%`;
+                }
+                btn.classList.toggle('cooldown', this.ultimateCooldown>0);
+                btn.classList.toggle('active', this.ultimateActive!==null);
+                // etiqueta según clase
+                const lab=btn.querySelector('.ult-label');
+                if(lab && this.player){
+                    const names={caballero:'CORTE', mago:'RAYO', picaro:'BOMBAS'};
+                    lab.textContent = names[this.player.classId]||'ULT';
+                }
+            }
         }
     }
 
@@ -533,6 +768,28 @@ export class Game {
                 this.explosions=this.explosions.filter(e=>e.life>0);
                 for(const sb of this.shieldBreaks){ sb.life-=dt; }
                 this.shieldBreaks=this.shieldBreaks.filter(e=>e.life>0);
+                // Bombas de la definitiva del pícaro
+                for(const b of this.ultimateBombs){
+                    b.timer-=dt; b.life-=dt;
+                    if(b.timer<=0 && !b.exploded){
+                        b.exploded=true;
+                        const candidates=this.entityManager.grid.query(b.x,b.y,b.radius);
+                        for(const e of candidates){
+                            if(e.type!=='enemy'||!e.alive) continue;
+                            const dx=e.x-b.x, dy=e.y-b.y;
+                            if(dx*dx+dy*dy < b.radius*b.radius){
+                                const dead=e.takeDamage(b.damage);
+                                this.spawnDamageNumber(e.x,e.y-12, `${b.damage}`, '#6EE7B7');
+                                const len=Math.hypot(dx,dy)||1;
+                                e.applyKnockback(dx/len, dy/len, 38);
+                                if(dead){ this.kills++; if(Math.random()<0.8) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
+                            }
+                        }
+                        this.spawnExplosion(b.x,b.y,b.radius,'#6EE7B7');
+                        this.audio.fireballExplode();
+                    }
+                }
+                this.ultimateBombs=this.ultimateBombs.filter(b=>b.life>0);
 
                 this._centerCamera(false);
 
@@ -712,6 +969,58 @@ export class Game {
             const ang = this._whipAngle || 0;
             ctx.fillStyle=`rgba(59,7,84,${0.22*alpha})`;
             ctx.beginPath(); ctx.arc(sxp + Math.cos(ang)*range*0.58, syp + Math.sin(ang)*range*0.58, 9, 0, Math.PI*2); ctx.fill();
+        }
+
+        // Definitivas
+        if(this.ultimateActive){
+            const ult=this.ultimateActive;
+            const p=this.player; const sxp=p.x - cam.x, syp=p.y - cam.y;
+            if(ult.type==='caballero'){
+                const prog = 1 - (ult.timer / CONFIG.ULTIMATES.caballero.duration);
+                const r = ult.range * (0.2 + prog*0.85);
+                const alpha = (ult.timer / CONFIG.ULTIMATES.caballero.duration) * 0.42;
+                ctx.fillStyle=`rgba(255,190,11,${alpha})`;
+                ctx.beginPath(); ctx.arc(sxp, syp, r, 0, Math.PI*2); ctx.fill();
+                ctx.strokeStyle=`rgba(255,255,255,${alpha*0.9})`; ctx.lineWidth=3;
+                ctx.beginPath(); ctx.arc(sxp, syp, r, 0, Math.PI*2); ctx.stroke();
+                ctx.strokeStyle=`rgba(97,12,39,${alpha})`; ctx.lineWidth=2;
+                ctx.beginPath(); ctx.arc(sxp, syp, r*0.72, 0, Math.PI*2); ctx.stroke();
+            } else if(ult.type==='mago'){
+                const len=ult.length, halfW=ult.width/2;
+                const ang=Math.atan2(ult.dirY, ult.dirX);
+                const pulse = 0.75 + Math.sin(this._ultBeamPulse)*0.22;
+                ctx.save();
+                ctx.translate(sxp, syp);
+                ctx.rotate(ang);
+                // núcleo del rayo
+                ctx.fillStyle=`rgba(167,139,250,${0.42*pulse})`;
+                ctx.fillRect(0, -halfW, len, halfW*2);
+                ctx.fillStyle=`rgba(255,255,255,${0.55*pulse})`;
+                ctx.fillRect(0, -halfW*0.38, len, halfW*0.76);
+                // borde
+                ctx.strokeStyle=`rgba(59,7,84,${0.65*pulse})`; ctx.lineWidth=2;
+                ctx.strokeRect(0, -halfW, len, halfW*2);
+                // chispas en la punta
+                ctx.fillStyle=`rgba(255,190,11,${0.85*pulse})`;
+                ctx.fillRect(len-10, -halfW-2, 10, halfW*2+4);
+                ctx.restore();
+            }
+        }
+        // Bombas de la definitiva del pícaro (antes de explotar)
+        for(const b of this.ultimateBombs){
+            if(b.exploded) continue;
+            const sx=b.x - cam.x, sy=b.y - cam.y;
+            const pulse = 0.7 + Math.sin(this.elapsed*12 + b.x*0.01)*0.3;
+            ctx.fillStyle=`rgba(0,0,0,${0.32*pulse})`;
+            ctx.fillRect(sx-7, sy+6, 14, 4);
+            ctx.fillStyle='#000';
+            ctx.fillRect(sx-6, sy-6, 12, 12);
+            ctx.fillStyle='#FFBE0B';
+            ctx.fillRect(sx-5, sy-5, 10, 10);
+            ctx.fillStyle='#000';
+            ctx.fillRect(sx-2, sy-2, 4, 4);
+            ctx.fillStyle=`rgba(255,255,255,${0.9*pulse})`;
+            ctx.fillRect(sx-3, sy-3, 2, 2);
         }
 
         // Floating texts
