@@ -1,5 +1,5 @@
 /**
- * Gem — Gema de XP
+ * Gem -- Gema de XP
  * PASO 2: Entidad básica para probar magnet y colisiones.
  * Lógica completa de dropeo en PASO 4, aquí solo atracción básica.
  */

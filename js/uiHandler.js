@@ -1,5 +1,5 @@
 /**
- * UIHandler — Gestión de DOM / HUD / Menús y State Machine visual
+ * UIHandler -- Gestión de DOM / HUD / Menús y State Machine visual
  * Separado del loop para mantener SRP.
  */
 import { GameState, CONFIG } from './config.js';
@@ -95,7 +95,7 @@ export class UIHandler {
     }
 
     renderClassPreviews(){
-        // usa el mismo SPRITES que in-game — importa dinámico para no romper ciclo
+        // usa el mismo SPRITES que in-game -- importa dinámico para no romper ciclo
         import('./pixelSprites.js').then(m=>{
             document.querySelectorAll('.pixel-portrait').forEach(c=>{
                 const cls=c.dataset.class;
@@ -114,10 +114,10 @@ export class UIHandler {
             if (this.els.hpText) this.els.hpText.textContent = `${Math.ceil(p.hp)}/${p.stats.maxHealth}`;
             const xpPct = (p.xp / p.xpToNext) * 100;
             if (this.els.xpFill) this.els.xpFill.style.width = `${xpPct}%`;
-            if (this.els.xpText) this.els.xpText.textContent = `Lv ${p.level} — ${p.xp}/${p.xpToNext}`;
+            if (this.els.xpText) this.els.xpText.textContent = `Lv ${p.level} -- ${p.xp}/${p.xpToNext}`;
         }
         if (this.els.timer) this.els.timer.textContent = formatTime(this.game.elapsed || 0);
-        if (this.els.kills) this.els.kills.textContent = `💀 ${this.game.kills || 0}`;
+        if (this.els.kills) this.els.kills.textContent = `[SKL] ${this.game.kills || 0}`;
 
         // Debug opcional con tecla F3 o CONFIG
         if (this.els.dbgFps) this.els.dbgFps.textContent = `FPS: ${Math.round(1 / (dt || 0.016))}`;

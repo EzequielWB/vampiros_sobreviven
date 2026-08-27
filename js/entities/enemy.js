@@ -1,5 +1,5 @@
 /**
- * Enemy — PASO 3: Variaciones (grunt/tank/runner/shooter) + IA steering
+ * Enemy -- PASO 3: Variaciones (grunt/tank/runner/shooter) + IA steering
  */
 import { CONFIG } from '../config.js';
 import { normalize } from '../utils.js';
@@ -91,11 +91,13 @@ export class Enemy {
         ctx.fillStyle='rgba(0,0,0,0.32)';
         const shW=this.radius*1.7, shH=4;
         ctx.fillRect(sx - shW/2, sy + this.radius + 2, shW, shH);
-        // sprite pixel
+        // sprite pixel -- más grande en mobile
         const map={ grunt:'grunt', tank:'tank', runner:'runner', shooter:'shooter' };
         const key=map[this.enemyType]||'grunt';
         const sprite=SPRITES[key]||SPRITES.grunt;
-        const scale=this.enemyType==='tank'?2.3:this.enemyType==='runner'?1.7:2.0;
+        const isMobile = (typeof window !== 'undefined' && window.innerWidth < 860);
+        const base = this.enemyType==='tank'?2.3:this.enemyType==='runner'?1.7:2.0;
+        const scale = isMobile ? base * 1.35 : base;
         drawPixelSprite(ctx, sprite, sx, sy, scale, false, this.hitFlash>0);
         // halo tirador
         if (this.isRanged) {

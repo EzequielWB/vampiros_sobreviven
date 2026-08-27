@@ -1,6 +1,6 @@
 /**
- * main.js — Punto de entrada
- * Los vampiros supervivientes de Ezequiel — PASO 1
+ * main.js -- Punto de entrada
+ * Los vampiros supervivientes de Ezequiel -- PASO 1
  */
 import { Game } from './game.js';
 import { renderClassPreview } from './pixelSprites.js';

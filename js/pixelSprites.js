@@ -1,5 +1,5 @@
 /**
- * pixelSprites.js — Sprites pixel art góticos para Los vampiros supervivientes de Ezequiel
+ * pixelSprites.js -- Sprites pixel art góticos para Los vampiros supervivientes de Ezequiel
  * Paleta gótica: #0F172A, #3B0754, #610C27, #004C40, #1E1E24
  * Cada sprite es un array de 16 strings (16x16). '.' = transparente
  * Colores: X=negro outline, M=metal claro #E2E8F0, m=metal medio #94A3B8,
@@ -26,7 +26,7 @@ export const PALETTE = {
   '.': null
 };
 
-// Caballero — armadura pesada, casco con visor, espada
+// Caballero -- armadura pesada, casco con visor, espada
 export const SPRITE_CABALLERO = [
   "................",
   "......XXXX......",
@@ -46,7 +46,7 @@ export const SPRITE_CABALLERO = [
   "..XXXXXXXXXXXX..",
 ];
 
-// Mago — sombrero puntiagudo, túnica violeta, báculo
+// Mago -- sombrero puntiagudo, túnica violeta, báculo
 export const SPRITE_MAGO = [
   ".......XX.......",
   "......XXXX......",
@@ -66,7 +66,7 @@ export const SPRITE_MAGO = [
   ".....XXXXXX.....",
 ];
 
-// Pícaro — capucha verde oscura, daga, ágil
+// Pícaro -- capucha verde oscura, daga, ágil
 export const SPRITE_PICARO = [
   "......XXXX......",
   ".....XXXXXX.....",
@@ -164,7 +164,7 @@ export const SPRITE_SHOOTER = [
 ];
 
 // Gemas pixel (no sprite 16x16, se dibuja como diamante)
-// Se mantiene el dibujo actual pero con paleta violeta — ya está en gem.js
+// Se mantiene el dibujo actual pero con paleta violeta -- ya está en gem.js
 
 export const SPRITES = {
   caballero: SPRITE_CABALLERO,
@@ -206,7 +206,7 @@ export function drawPixelSprite(ctx, sprite, cx, cy, scale = 2, flip = false, wh
 }
 
 /**
- * Renderiza preview en un <canvas> de clase — usa EXACTO mismo sprite que in-game
+ * Renderiza preview en un <canvas> de clase -- usa EXACTO mismo sprite que in-game
  */
 export function renderClassPreview(canvas, classId) {
   if (!canvas) return;
@@ -245,7 +245,7 @@ export function renderClassPreview(canvas, classId) {
     // patrón grid sutil
     ctx.fillStyle = 'rgba(255,255,255,0.04)';
     for(let i=0;i<size;i+=8){ ctx.fillRect(i,0,1,size); ctx.fillRect(0,i,size,1); }
-    // dibujar sprite centrado, scale 3.5 = 56px (ocupa bien el canvas) — MISMO sprite que in-game
+    // dibujar sprite centrado, scale 3.5 = 56px (ocupa bien el canvas) -- MISMO sprite que in-game
     drawPixelSprite(ctx, sprite, size/2, size/2 + 1, 3.5, false, false);
     // sombra inferior pixel
     ctx.fillStyle = 'rgba(0,0,0,0.32)';

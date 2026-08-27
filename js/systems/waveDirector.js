@@ -1,5 +1,5 @@
 /**
- * WaveDirector — PASO 3: Oleadas en bordes de cámara, escalado por minuto, mix de tipos
+ * WaveDirector -- PASO 3: Oleadas en bordes de cámara, escalado por minuto, mix de tipos
  * Spawnea fuera de pantalla usando camera + SPAWN_MARGIN.
  * Cantidad: BASE_COUNT + floor(minute * COUNT_PER_MINUTE)  (capado)
  * Tipos: MIX según minuto + RNG pesado.

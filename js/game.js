@@ -1,5 +1,5 @@
 /**
- * Game — PASO 4+5: Roles exclusivos (Aura solo Pícaro, Escudo Caballero, Bola Mago) + combate completo + nivel
+ * Game -- PASO 4+5: Roles exclusivos (Aura solo Pícaro, Escudo Caballero, Bola Mago) + combate completo + nivel
  */
 import { CONFIG, GameState } from './config.js';
 import { InputManager } from './inputManager.js';
@@ -45,7 +45,7 @@ export class Game {
         this.floatingTexts = [];
         this.explosions = []; // {x,y,r,life,maxLife}
         this.shieldBreaks = []; // {x,y,life}
-        // Timers de armas por clase (automáticas) — técnicas exclusivas
+        // Timers de armas por clase (automáticas) -- técnicas exclusivas
         this._timers = { whip: 0, wand: 0, dagger: 0, garlic: 0, shield: 0, fireball: 0 };
         this._whipFlash = 0;
         this._whipAngle = 0;
@@ -73,19 +73,17 @@ export class Game {
         this._lastTime = performance.now();
         this._rafId = requestAnimationFrame(this.loop);
 
-        console.log(`%c${CONFIG.TITLE} — PASO 3`, 'color:#ffbe0b;font-weight:bold;font-size:13px');
+        console.log(`%c${CONFIG.TITLE} -- PASO 3`, 'color:#ffbe0b;font-weight:bold;font-size:13px');
         console.log('[PASO 3] Oleadas en bordes + escalado/minuto + 4 tipos enemigos + roles diferenciados + audio sintético');
         console.log('Roles: Caballero (Espada arco) | Mago (Varita auto) | Pícaro (Dagas + Aura)');
         console.log('Controles: WASD mover | G grid | T stress 120 | P/ESC pausa | ESPACIO: reiniciar (en GameOver)');
     }
 
     _setupCanvas() {
-        // Cap DPR en mobile para no saturar memoria (360*3=1080, 1280*3=3840 -> 8M pixeles muy pesado)
         const isMobile = window.innerWidth < 860;
         const rawDpr = window.devicePixelRatio || 1;
         const dpr = isMobile ? Math.min(rawDpr, 1.5) : Math.min(rawDpr, 2);
         const rect = this.canvas.getBoundingClientRect();
-        // Si el rect aún no tiene tamaño (0), usar el tamaño lógico
         const w = rect.width || this.canvas.parentElement.clientWidth || CONFIG.CANVAS.WIDTH;
         const h = rect.height || w * 9/16;
         this.canvas.width = Math.floor(CONFIG.CANVAS.WIDTH * dpr);
@@ -93,9 +91,11 @@ export class Game {
         this.canvas.style.width = w + 'px';
         this.canvas.style.height = h + 'px';
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        this.logicalWidth = CONFIG.CANVAS.WIDTH;
-        this.logicalHeight = CONFIG.CANVAS.HEIGHT;
+        // En mobile, zoom 1.33x para que no se vea chiquito
+        this.logicalWidth = isMobile ? 960 : CONFIG.CANVAS.WIDTH;
+        this.logicalHeight = isMobile ? 540 : CONFIG.CANVAS.HEIGHT;
         this.camera.w = this.logicalWidth;
+        this.camera.h = this.logicalHeight;
         this.camera.h = this.logicalHeight;
     }
 
@@ -126,7 +126,7 @@ export class Game {
         }
         if (k === 'm') {
             const muted = this.audio.toggleMute();
-            this.spawnPickupText(this.player ? this.player.x : this.worldWidth/2, this.player ? this.player.y-30 : this.worldHeight/2, muted ? '🔇 SILENCIO' : '🔊 SONIDO', '#ffbe0b');
+            this.spawnPickupText(this.player ? this.player.x : this.worldWidth/2, this.player ? this.player.y-30 : this.worldHeight/2, muted ? '[MUT] SILENCIO' : '[SND] SONIDO', '#ffbe0b');
         }
         if (k === 't' && this.state === GameState.GAMEPLAY) {
             this._stressTest(120);
@@ -155,15 +155,21 @@ export class Game {
         const prev = this.state;
         this.state = newState;
         this.ui.showState(newState);
-        console.log(`[State] ${prev} → ${newState}`);
+        console.log(`[State] ${prev} -> ${newState}`);
         if (newState === GameState.GAME_OVER) {
             this.audio.gameOver();
             this.ui.showGameOver({ time: this.elapsed, kills: this.kills, level: this.player?.level || 1 });
         }
         if (newState === GameState.PAUSED) this.audio.pause();
-        // joystick mobile solo en GAMEPLAY
         const wantJoy = (newState === GameState.GAMEPLAY);
         this.input.setJoystickVisible?.(wantJoy);
+        const container = document.getElementById('game-container');
+        if(container){
+            const isMenu = (newState===GameState.MENU || newState===GameState.CLASS_SELECT);
+            container.classList.toggle('menu-mode', isMenu && window.innerWidth < 860);
+        }
+        document.body.classList.toggle('gameplay', wantJoy);
+        document.body.classList.toggle('menu', !wantJoy);
     }
 
     startGame(classId = 'caballero') {
@@ -186,7 +192,7 @@ export class Game {
         this.player = new Player(px, py, classId);
         this.entityManager.setPlayer(this.player);
 
-        // Armas iniciales por clase — técnicas exclusivas
+        // Armas iniciales por clase -- técnicas exclusivas
         if (classId === 'mago') this.player.weapons = ['wand','fireball'];
         else if (classId === 'caballero') this.player.weapons = ['whip','shield'];
         else this.player.weapons = ['dagger','garlic']; // pícaro: dagas + aura exclusiva
@@ -615,7 +621,7 @@ export class Game {
         ctx.strokeStyle='rgba(97,12,39,0.38)'; ctx.lineWidth=2; ctx.setLineDash([8,8]);
         ctx.strokeRect(-cam.x, -cam.y, this.worldWidth, this.worldHeight); ctx.setLineDash([]); ctx.restore();
 
-        // Aura garlic — EXCLUSIVA PÍCARO
+        // Aura garlic -- EXCLUSIVA PÍCARO
         if(this.player && this.player.classId==='picaro'){
             const sxp=this.player.x - cam.x, syp=this.player.y - cam.y;
             const r=(CONFIG.PLAYER.CLASSES.picaro.weaponMods.garlicRadius||75) + (this.player._garlicBonus||0);
@@ -632,7 +638,7 @@ export class Game {
             }
         }
 
-        // Escudo — EXCLUSIVO CABALLERO (visual + cargas)
+        // Escudo -- EXCLUSIVO CABALLERO (visual + cargas)
         if(this.player && this.player.classId==='caballero'){
             const sxp=this.player.x - cam.x, syp=this.player.y - cam.y;
             if(this.player.shieldActive && this.player.shieldCharges>0){
@@ -687,11 +693,11 @@ export class Game {
             }
             ctx.stroke();
             ctx.fillStyle='rgba(255,255,255,0.85)'; ctx.font='11px serif'; ctx.textAlign='center';
-            ctx.fillText('🛡️', sx, sy);
+            ctx.fillText('[SHD]', sx, sy);
         }
         ctx.globalAlpha=1;
 
-        // Whip arco visual — ahora orientado al enemigo más cercano
+        // Whip arco visual -- ahora orientado al enemigo más cercano
         if(this._whipFlash>0 && this.player){
             const p=this.player;
             const sxp=p.x - cam.x, syp=p.y - cam.y;
@@ -723,10 +729,10 @@ export class Game {
             const cls = CONFIG.PLAYER.CLASSES[this.player.classId];
             ctx.fillStyle='rgba(0,0,0,0.48)'; ctx.fillRect(this.logicalWidth-230, 46, 220, 28); ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.strokeRect(this.logicalWidth-230, 46, 220, 28);
             ctx.fillStyle='#fff'; ctx.font='10px JetBrains Mono, monospace'; ctx.textAlign='right';
-            const wName = cls.id==='caballero'?'⚔️ Espada+🛡️':cls.id==='mago'?'🔮 Varita+🔥':'🗡️ Dagas+🧄';
-            ctx.fillText(`${cls.emoji} ${cls.name} — ${wName}`, this.logicalWidth-16, 63);
+            const wName = cls.id==='caballero'?'[SWD] Espada+[SHD]':cls.id==='mago'?'[ORB] Varita+[FIR]':'[DAG] Dagas+[GAR]';
+            ctx.fillText(`${cls.emoji} ${cls.name} -- ${wName}`, this.logicalWidth-16, 63);
             ctx.fillStyle='rgba(255,255,255,0.45)'; ctx.font='9px JetBrains Mono, monospace';
-            ctx.fillText('Auto-ataque • No requiere teclas', this.logicalWidth-16, 72);
+            ctx.fillText('Auto-ataque - No requiere teclas', this.logicalWidth-16, 72);
         }
 
         // Debug overlay
@@ -740,7 +746,7 @@ export class Game {
             ctx.fillText(`Ent: ${this.entityManager.count()}  Ene: ${this.entityManager.enemyCount()} [${mixStr}]  Celdas:${s.grid.cellsUsed}`, 16, 60);
             ctx.fillText(`Oleada #${this.waveDirector.waveNumber}  Intervalo: ${(this.waveDirector.spawnCooldown).toFixed(2)}s`, 16, 74);
             ctx.fillText(`Grid: ${s.checks} checks vs Brute ${s.brute}  Ahorro ${s.saved}%`, 16, 88);
-            ctx.fillStyle=s.saved>80?'#6EE7B7':s.saved>50?'#A78BFA':'#F43F5E'; ctx.fillText(`✔ Spawn en bordes • Escalado x minuto • Paleta gótica`,16,102);
+            ctx.fillStyle=s.saved>80?'#6EE7B7':s.saved>50?'#A78BFA':'#F43F5E'; ctx.fillText(`[OK] Spawn en bordes - Escalado x minuto - Paleta gótica`,16,102);
             ctx.fillStyle='rgba(255,255,255,0.55)'; ctx.fillText(`G:grid M:mute T:+120  ESPACIO: reiniciar (muerte)`,16,112);
             if(this.entityManager.enemyCount()===0){
                 ctx.fillStyle='rgba(255,255,255,0.35)'; ctx.textAlign='center'; ctx.fillText('¡Sobrevive! Armas automáticas por clase', cam.w/2, 24);
@@ -759,7 +765,7 @@ export class Game {
         for(let i=0;i<80;i++){ const x=(i*137.5+t*10)%CONFIG.CANVAS.WIDTH, y=(i*73.3)%380, a=0.3+Math.sin(t+i)*0.2; ctx.globalAlpha=Math.max(0,a); ctx.fillRect(x,y,1.2,1.2); }
         ctx.globalAlpha=1;
         ctx.fillStyle='rgba(255,255,255,0.22)'; ctx.font='10px JetBrains Mono, monospace'; ctx.textAlign='center';
-        ctx.fillText('PASO 4+5 — Combate (armas+proyectiles+daño) • XP magnet • Nivel + UI • Técnicas exclusivas • Grid O(n)', CONFIG.CANVAS.WIDTH/2, CONFIG.CANVAS.HEIGHT-18);
+        ctx.fillText('PASO 4+5 -- Combate (armas+proyectiles+daño) - XP magnet - Nivel + UI - Técnicas exclusivas - Grid O(n)', CONFIG.CANVAS.WIDTH/2, CONFIG.CANVAS.HEIGHT-18);
         ctx.fillStyle='rgba(97,12,39,0.95)'; ctx.beginPath(); ctx.arc(CONFIG.CANVAS.WIDTH-22,18,4,0,Math.PI*2); ctx.fill();
         ctx.strokeStyle='rgba(97,12,39,0.32)'; ctx.lineWidth=8; ctx.beginPath(); ctx.arc(CONFIG.CANVAS.WIDTH-22,18,4+Math.abs(Math.sin(t*3))*6,0,Math.PI*2); ctx.stroke();
     }

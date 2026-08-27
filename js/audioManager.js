@@ -1,5 +1,5 @@
 /**
- * AudioManager — Sonidos sintéticos con Web Audio API (sin archivos externos)
+ * AudioManager -- Sonidos sintéticos con Web Audio API (sin archivos externos)
  * PASO 3: feedback jugable. Se inicializa al primer input del usuario.
  */
 export class AudioManager {

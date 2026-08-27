@@ -1,5 +1,5 @@
 /**
- * Shield — Escudo del Caballero
+ * Shield -- Escudo del Caballero
  * No es una entidad independiente en el grid; es un buff visual que sigue al jugador.
  * Se gestiona desde Game + Player. Este archivo solo exporta helpers de render.
  * El escudo bloquea el siguiente daño y se rompe. Reaparece tras cooldown.
@@ -28,9 +28,9 @@ export class Shield {
                 ctx.textAlign='center'; ctx.textBaseline='middle';
                 // sombra
                 ctx.fillStyle='rgba(0,0,0,0.45)';
-                ctx.fillText('🛡️', sx+ox+1, sy+oy+1);
+                ctx.fillText('[SHD]', sx+ox+1, sy+oy+1);
                 ctx.fillStyle='#fff';
-                ctx.fillText('🛡️', sx+ox, sy+oy);
+                ctx.fillText('[SHD]', sx+ox, sy+oy);
             }
         }
     }

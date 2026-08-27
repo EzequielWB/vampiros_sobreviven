@@ -1,5 +1,5 @@
 /**
- * Los vampiros supervivientes de Ezequiel — Configuración Global
+ * Los vampiros supervivientes de Ezequiel -- Configuración Global
  * Estética Gótica Pixel: paleta Azul Abisal / Violeta Vacío / Bordó Sangre / Verde Ftalo / Gris Cripta
  */
 
@@ -30,7 +30,7 @@ export const CONFIG = Object.freeze({
         },
         CLASSES: {
             caballero: {
-                id: 'caballero', name: 'Caballero', emoji: '🛡️', color: '#E2E8F0',
+                id: 'caballero', name: 'Caballero', emoji: '[SHD]', color: '#E2E8F0',
                 desc: 'Fortaleza. Espada + Escudo que bloquea y reaparece.',
                 weapon: 'whip', special: 'shield',
                 modifiers: { maxHealth: +45, armor: +4, moveSpeed: 0, damageMultiplier: 1.0, cooldownReduction: 0 },
@@ -38,7 +38,7 @@ export const CONFIG = Object.freeze({
                 specialMods: { shieldCooldown: 11, shieldCharges: 1, shieldDuration: 999, shieldRadius: 32 }
             },
             mago: {
-                id: 'mago', name: 'Mago', emoji: '🧙', color: '#C4B5FD',
+                id: 'mago', name: 'Mago', emoji: '[MAG]', color: '#C4B5FD',
                 desc: 'Cataclismo. Varita + Bola de Fuego explosiva.',
                 weapon: 'wand', special: 'fireball',
                 modifiers: { maxHealth: -15, armor: 0, moveSpeed: +10, damageMultiplier: 1.30, cooldownReduction: 0.22, critChance: 0.04 },
@@ -46,7 +46,7 @@ export const CONFIG = Object.freeze({
                 specialMods: { fireballCooldown: 3.4, fireballDamage: 34, fireballSpeed: 285, fireballRadius: 78, fireballExplosion: 72 }
             },
             picaro: {
-                id: 'picaro', name: 'Pícaro', emoji: '🗡️', color: '#6EE7B7',
+                id: 'picaro', name: 'Pícaro', emoji: '[DAG]', color: '#6EE7B7',
                 desc: 'Torbellino. Dagas + Aura de Ajo exclusiva.',
                 weapon: 'dagger', special: 'garlic',
                 modifiers: { maxHealth: -10, armor: 0, moveSpeed: +52, critChance: 0.18, critDamage: 1.75, damageMultiplier: 1.0, cooldownReduction: 0.10 },
@@ -60,10 +60,10 @@ export const CONFIG = Object.freeze({
         BASE_HP: 20, BASE_DAMAGE: 10, BASE_SPEED: 65,
         SCALING: { hpPerMinute: 7, damagePerMinute: 1.8, speedPerMinute: 3.2, maxSpeed: 155 },
         TYPES: {
-            grunt:   { id:'grunt',   name:'Noctámbulo', emoji:'🧛', color:'#610C27', hpMul:1.0, dmgMul:1.0, spdMul:1.0, radius:14, xp:12 },
-            tank:    { id:'tank',    name:'Goliat',     emoji:'👹', color:'#7A1432', hpMul:3.2, dmgMul:1.6, spdMul:0.62, radius:20, xp:28 },
-            runner:  { id:'runner',  name:'Acechador',  emoji:'🦇', color:'#45081C', hpMul:0.55, dmgMul:0.85, spdMul:1.65, radius:11, xp:10 },
-            shooter: { id:'shooter', name:'Nigromante', emoji:'🧟', color:'#3B0754', hpMul:0.95, dmgMul:0.9, spdMul:0.85, radius:15, xp:18, ranged:true, shootCooldown:1.8, projSpeed:210, projDamage:9 },
+            grunt:   { id:'grunt',   name:'Noctámbulo', emoji:'[VMP]', color:'#610C27', hpMul:1.0, dmgMul:1.0, spdMul:1.0, radius:14, xp:12 },
+            tank:    { id:'tank',    name:'Goliat',     emoji:'[OGRE]', color:'#7A1432', hpMul:3.2, dmgMul:1.6, spdMul:0.62, radius:20, xp:28 },
+            runner:  { id:'runner',  name:'Acechador',  emoji:'[BAT]', color:'#45081C', hpMul:0.55, dmgMul:0.85, spdMul:1.65, radius:11, xp:10 },
+            shooter: { id:'shooter', name:'Nigromante', emoji:'[ZMB]', color:'#3B0754', hpMul:0.95, dmgMul:0.9, spdMul:0.85, radius:15, xp:18, ranged:true, shootCooldown:1.8, projSpeed:210, projDamage:9 },
         }
     },
 
@@ -90,25 +90,25 @@ export const CONFIG = Object.freeze({
     },
 
     WEAPONS: {
-        WHIP:     { id:'whip',     name:'Espada Sagrada',   emoji:'⚔️', cooldown: 0.72, damage: 22, range: 110, arc: Math.PI*1.05, knockback: 70, behavior: 'frontal_arc' },
-        WAND:     { id:'wand',     name:'Varita Mágica',    emoji:'🔮', cooldown: 0.38, damage: 14, speed: 420, behavior: 'nearest_target' },
-        DAGGER:   { id:'dagger',   name:'Dagas',            emoji:'🗡️', cooldown: 0.28, damage: 9,  speed: 480, count: 2, behavior: 'nearest_target_rapid' },
-        GARLIC:   { id:'garlic',   name:'Aura de Ajo',      emoji:'🧄', cooldown: 0.22, damage: 7,  radius: 75,  behavior: 'aoe_constant', exclusive: 'picaro' },
-        SHIELD:   { id:'shield',   name:'Escudo Sagrado',   emoji:'🛡️', cooldown: 11, charges: 1, radius: 32, behavior: 'shield_block', exclusive: 'caballero' },
-        FIREBALL: { id:'fireball', name:'Bola de Fuego',    emoji:'🔥', cooldown: 3.4, damage: 34, speed: 285, radius: 14, explosion: 72, behavior: 'explosive', exclusive: 'mago' }
+        WHIP:     { id:'whip',     name:'Espada Sagrada',   emoji:'[SWD]', cooldown: 0.72, damage: 22, range: 110, arc: Math.PI*1.05, knockback: 70, behavior: 'frontal_arc' },
+        WAND:     { id:'wand',     name:'Varita Mágica',    emoji:'[ORB]', cooldown: 0.38, damage: 14, speed: 420, behavior: 'nearest_target' },
+        DAGGER:   { id:'dagger',   name:'Dagas',            emoji:'[DAG]', cooldown: 0.28, damage: 9,  speed: 480, count: 2, behavior: 'nearest_target_rapid' },
+        GARLIC:   { id:'garlic',   name:'Aura de Ajo',      emoji:'[GAR]', cooldown: 0.22, damage: 7,  radius: 75,  behavior: 'aoe_constant', exclusive: 'picaro' },
+        SHIELD:   { id:'shield',   name:'Escudo Sagrado',   emoji:'[SHD]', cooldown: 11, charges: 1, radius: 32, behavior: 'shield_block', exclusive: 'caballero' },
+        FIREBALL: { id:'fireball', name:'Bola de Fuego',    emoji:'[FIR]', cooldown: 3.4, damage: 34, speed: 285, radius: 14, explosion: 72, behavior: 'explosive', exclusive: 'mago' }
     },
 
     UPGRADES_POOL: [
-        { id:'hp_up',     name:'+22 Vida Máx',        desc:'+22 vida máxima y cura', emoji:'❤️', type:'generic' },
-        { id:'dmg_up',    name:'+15% Daño',           desc:'Más daño en todas las armas', emoji:'💥', type:'generic' },
-        { id:'spd_up',    name:'+12% Velocidad',      desc:'Te mueves más rápido', emoji:'🏃', type:'generic' },
-        { id:'mag_up',    name:'+28 Imán',            desc:'Atrae gemas desde más lejos', emoji:'🧲', type:'generic' },
-        { id:'cd_up',     name:'-10% Cooldown',       desc:'Atacas más seguido', emoji:'⏱️', type:'generic' },
-        { id:'proj_up',   name:'+1 Proyectil',        desc:'Un proyectil extra (mago/pícaro)', emoji:'✨', type:'generic' },
-        { id:'armor_up',  name:'+1 Armadura',         desc:'Reduce daño recibido', emoji:'🛡️', type:'generic' },
-        { id:'garlic_up',   name:'Ajo +20 radio / +30% daño', desc:'Aura más grande y letal', emoji:'🧄', type:'exclusive', forClass:'picaro' },
-        { id:'shield_up',   name:'Escudo +1 carga / -20% CD', desc:'Escudo más resistente', emoji:'🛡️', type:'exclusive', forClass:'caballero' },
-        { id:'fireball_up', name:'Bola +25% daño y explosión', desc:'Explosión más grande', emoji:'🔥', type:'exclusive', forClass:'mago' },
+        { id:'hp_up',     name:'+22 Vida Máx',        desc:'+22 vida máxima y cura', emoji:'[HP]', type:'generic' },
+        { id:'dmg_up',    name:'+15% Daño',           desc:'Más daño en todas las armas', emoji:'[DMG]', type:'generic' },
+        { id:'spd_up',    name:'+12% Velocidad',      desc:'Te mueves más rápido', emoji:'[SPD]', type:'generic' },
+        { id:'mag_up',    name:'+28 Imán',            desc:'Atrae gemas desde más lejos', emoji:'[MAG]', type:'generic' },
+        { id:'cd_up',     name:'-10% Cooldown',       desc:'Atacas más seguido', emoji:'[TMR]', type:'generic' },
+        { id:'proj_up',   name:'+1 Proyectil',        desc:'Un proyectil extra (mago/pícaro)', emoji:'[PRJ]', type:'generic' },
+        { id:'armor_up',  name:'+1 Armadura',         desc:'Reduce daño recibido', emoji:'[SHD]', type:'generic' },
+        { id:'garlic_up',   name:'Ajo +20 radio / +30% daño', desc:'Aura más grande y letal', emoji:'[GAR]', type:'exclusive', forClass:'picaro' },
+        { id:'shield_up',   name:'Escudo +1 carga / -20% CD', desc:'Escudo más resistente', emoji:'[SHD]', type:'exclusive', forClass:'caballero' },
+        { id:'fireball_up', name:'Bola +25% daño y explosión', desc:'Explosión más grande', emoji:'[FIR]', type:'exclusive', forClass:'mago' },
     ],
 
     COLORS: {

@@ -1,5 +1,5 @@
 /**
- * WeaponSystem — Gestión de armas, proyectiles y cálculo de daño
+ * WeaponSystem -- Gestión de armas, proyectiles y cálculo de daño
  * PASO 1: stub. Implementación completa en PASO 4.
  *
  * Armas requeridas:

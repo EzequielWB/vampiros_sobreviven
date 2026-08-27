@@ -1,5 +1,5 @@
 /**
- * EnemyProjectile — Proyectil del Nigromante (shooter)
+ * EnemyProjectile -- Proyectil del Nigromante (shooter)
  */
 import { normalize } from '../utils.js';
 

@@ -1,5 +1,5 @@
 /**
- * utils.js — Helpers matemáticos / geométricos
+ * utils.js -- Helpers matemáticos / geométricos
  * Usado por todas las entidades. Sin dependencias.
  */
 

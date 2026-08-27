@@ -1,5 +1,5 @@
 /**
- * Projectile — Stub PASO 2/3, implementación PASO 4
+ * Projectile -- Stub PASO 2/3, implementación PASO 4
  * Ya deja la estructura para que EntityManager lo gestione con Grid.
  */
 import { normalize } from '../utils.js';

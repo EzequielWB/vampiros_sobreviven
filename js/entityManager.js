@@ -1,7 +1,7 @@
 /**
- * EntityManager — PASO 2: Completo con colisiones por Spatial Hashing
+ * EntityManager -- PASO 2: Completo con colisiones por Spatial Hashing
  * - Rebuild O(n) cada frame
- * - Colisiones sin O(n²): solo chequea vecinos 3x3
+ * - Colisiones sin O(n^2): solo chequea vecinos 3x3
  * - Métricas de rendimiento
  */
 import { SpatialGrid } from './spatialGrid.js';
@@ -53,7 +53,7 @@ export class EntityManager {
     queryNearby(entity, radius) { return this.grid.queryNearby(entity, radius); }
 
     /**
-     * Colisiones principales usando Grid — evita O(n²)
+     * Colisiones principales usando Grid -- evita O(n^2)
      * 1) Enemigo vs Jugador (daño por contacto)
      * 2) Enemigo vs Enemigo (separación leve para no stackear)
      * 3) Proyectil vs Enemigo (para PASO 4, ya preparado)
@@ -63,7 +63,7 @@ export class EntityManager {
         this.collisionChecks = 0;
         let hits = 0;
 
-        // 1) Jugador vs Enemigos — query alrededor del jugador
+        // 1) Jugador vs Enemigos -- query alrededor del jugador
         if (game.player && game.player.alive) {
             const p = game.player;
             const radius = p.radius + 18 + 20; // radio jugador + enemigo max + margen
@@ -125,7 +125,7 @@ export class EntityManager {
             }
         }
 
-        // 2) Proyectiles vs Enemigos — PASO 4 preview (sin daño aún, solo conteo)
+        // 2) Proyectiles vs Enemigos -- PASO 4 preview (sin daño aún, solo conteo)
         // Cada proyectil query a su radio
         for (const proj of this.projectiles) {
             if (!proj.alive) continue;
@@ -147,7 +147,7 @@ export class EntityManager {
         return { checks: this.collisionChecks, hits, brute: this.bruteForceChecks };
     }
 
-    /** Separación leve entre enemigos para evitar stacking — usa Grid */
+    /** Separación leve entre enemigos para evitar stacking -- usa Grid */
     separateEnemies() {
         for (const e of this.enemies) {
             if (!e.alive) continue;
@@ -178,7 +178,7 @@ export class EntityManager {
             }
         }
 
-        // 2) Rebuild grid O(n) — CRÍTICO antes de colisiones
+        // 2) Rebuild grid O(n) -- CRÍTICO antes de colisiones
         this.rebuildGrid();
 
         // 3) Separación (opcional, barato con grid)

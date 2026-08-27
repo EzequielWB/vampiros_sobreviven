@@ -1,5 +1,5 @@
 /**
- * InputManager — teclado + mouse + táctil (joystick + toque directo)
+ * InputManager -- teclado + mouse + táctil (joystick + toque directo)
  * Expone getMovementVector() normalizado, prioriza táctil si está activo.
  */
 export class InputManager {
@@ -15,7 +15,7 @@ export class InputManager {
         this.stickEl = null;
         this.joyActive = false;
         this.joyCenter = { x: 0, y: 0 };
-        this.joyRadius = 42;
+        this.joyRadius = 52;
 
         this._keyDown = this._keyDown.bind(this);
         this._keyUp = this._keyUp.bind(this);
@@ -79,16 +79,22 @@ export class InputManager {
     _isTouchOnJoystick(touch){
         if(!this.joyEl) return false;
         const r = this.joyEl.getBoundingClientRect();
-        return touch.clientX >= r.left && touch.clientX <= r.right && touch.clientY >= r.top && touch.clientY <= r.bottom;
+        const pad = 18;
+        return touch.clientX >= r.left - pad && touch.clientX <= r.right + pad && touch.clientY >= r.top - pad && touch.clientY <= r.bottom + pad;
     }
 
     _onTouchStart(e){
-        // si el juego está en menú, no interferir con clicks de UI
         const t = e.touches[0];
         if(!t) return;
         const target = e.target;
-        // si toca un botón, ignorar para no bloquear clicks
         if(target.closest && target.closest('button')) return;
+        // En menú, permitir scroll normal (no capturar toque como movimiento)
+        const hudHidden = document.getElementById('hud')?.classList.contains('hidden');
+        const inGameplay = !hudHidden;
+        if(!inGameplay && !this._isTouchOnJoystick(t)){
+            // en menú, no interferir con scroll
+            return;
+        }
 
         // detectar si es joystick
         if(this._isTouchOnJoystick(t)){

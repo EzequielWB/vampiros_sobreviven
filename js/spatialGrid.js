@@ -1,7 +1,7 @@
 /**
- * SpatialGrid — Partición espacial por Hashing en Grid
+ * SpatialGrid -- Partición espacial por Hashing en Grid
  * PASO 2: Implementación completa con métricas y debug.
- * Evita O(n²) al consultar solo celdas vecinas.
+ * Evita O(n^2) al consultar solo celdas vecinas.
  * Con 1000 entidades: O(n) rebuild + queries O(k) vs O(1M) chequeos.
  */
 import { hashCell } from './utils.js';

@@ -1,5 +1,5 @@
 /**
- * Fireball — Bola de Fuego explosiva del Mago
+ * Fireball -- Bola de Fuego explosiva del Mago
  * Vuela hacia el enemigo más cercano, al impactar o expirar explota en AoE.
  * Usa SpatialGrid para explosión O(k).
  */
@@ -105,7 +105,7 @@ export class Fireball {
         ctx.beginPath(); ctx.arc(sx,sy,this.radius,0,Math.PI*2); ctx.fill();
         ctx.fillStyle='rgba(255,255,255,0.85)';
         ctx.beginPath(); ctx.arc(sx-2,sy-2,3,0,Math.PI*2); ctx.fill();
-        ctx.font='11px serif'; ctx.textAlign='center'; ctx.fillText('🔥', sx, sy+1);
+        ctx.font='11px serif'; ctx.textAlign='center'; ctx.fillText('[FIR]', sx, sy+1);
     }
 }
 
