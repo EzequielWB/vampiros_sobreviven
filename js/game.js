@@ -212,11 +212,27 @@ export class Game {
         this.explosions = [];
         this.shieldBreaks = [];
         this._timers = { whip: 0.35, wand: 0.28, dagger: 0.2, garlic: 0, shield: 1.0, fireball: 1.2, lance: 0.28, bow: 0.28 };
-        this._whipFlash = 0;
+        this._whipFlash = 0; // legacy, ya no se usa para Artoria
         this._lanceFlash = 0;
         this._lanceAngle = 0;
         this._garlicPulse = 0;
         this._shieldPulse = 0;
+        this._artoriaSwingDir = 1; // 1 = derecha, -1 = izquierda (alterna cada ataque)
+        this._gaeBolgLances = [];
+        this._whipSwings = []; // array de {angle, timer, maxTimer, isArtoria}
+        this._musashiHand = 1; // 1 = derecha, -1 = izquierda
+        this._musashiParryTimer = 0;
+        this._musashiSlashes = [];
+        this._musashiStances = [];
+        this._leviathan = null;
+        this._leviathanThrown = false;
+        this._alucardMuzzleFlash = null;
+        // Alucard familiars (ultimate)
+        this._alucardFamiliars = [];
+        // Kratos rage visual
+        this._kratosRagePulse = 0;
+        // Musashi stance tracking
+        this._musashiStanceCount = 0;
 
         this.entityManager = new EntityManager(CONFIG.GRID.CELL_SIZE);
         this.waveDirector = new WaveDirector(this);
@@ -232,6 +248,9 @@ export class Game {
         else if (classId === 'artoria') this.player.weapons = ['artoria_sword'];
         else if (classId === 'cu') this.player.weapons = ['lance'];
         else if (classId === 'emiya') this.player.weapons = ['bow'];
+        else if (classId === 'alucard') this.player.weapons = ['alucard_guns'];
+        else if (classId === 'kratos') this.player.weapons = ['leviathan'];
+        else if (classId === 'musashi') this.player.weapons = ['niten'];
         else this.player.weapons = ['dagger','garlic']; // pícaro
 
         this.spawnGemBurst(px + 90, py, 3);
@@ -334,7 +353,12 @@ export class Game {
                 this._timers.whip = effCD;
                 this._doWhip();
             }
-            if(this._whipFlash>0) this._whipFlash-=dt;
+        }
+
+        // Actualizar swings visuales (Artoria y Caballero) — SIEMPRE, independiente de clase
+        if(this._whipSwings && this._whipSwings.length > 0){
+            for(const s of this._whipSwings) s.timer -= dt;
+            this._whipSwings = this._whipSwings.filter(s => s.timer > 0);
         }
 
         // Mago: Varita
@@ -419,7 +443,6 @@ export class Game {
                 this._timers.whip = effCD;
                 this._doArtoriaSword();
             }
-            if(this._whipFlash>0) this._whipFlash-=dt;
         }
         // Cu: Lanza lineal
         if(cls==='cu'){
@@ -448,6 +471,76 @@ export class Game {
                     }
                 }
             }
+        }
+
+        // Alucard: Pistolas duales (Casull + Jackal) - auto-target rápido
+        if(cls==='alucard'){
+            if(!this._timers.alucard_guns) this._timers.alucard_guns=0;
+            this._timers.alucard_guns -= dt;
+            const mods = CONFIG.PLAYER.CLASSES.alucard.weaponMods;
+            const effCD = (mods.cooldown || 0.18) * reduce;
+            if(this._timers.alucard_guns<=0){
+                this._timers.alucard_guns = effCD;
+                const count = (mods.count || 2) + (p.stats.projectileCount|0);
+                const targets = nearest(count, 620);
+                if(targets.length===0){
+                    // Disparar al frente con spread
+                    for(let i=0;i<count;i++){
+                        const ang = (p.facing===1?0:Math.PI) + (Math.random()-0.5)*mods.spread;
+                        this._fireAlucardShot(p.x + Math.cos(ang)*30, p.y + Math.sin(ang)*30, ang);
+                    }
+                } else {
+                    for(let i=0;i<Math.min(targets.length, count);i++){
+                        const t = targets[i];
+                        const ang = Math.atan2(t.y-p.y, t.x-p.x) + (Math.random()-0.5)*mods.spread;
+                        this._fireAlucardShot(p.x + Math.cos(ang)*30, p.y + Math.sin(ang)*30, ang);
+                    }
+                }
+            }
+        }
+
+        // Kratos: Hacha Léviatán (lanzar + recall con ricochet)
+        if(cls==='kratos'){
+            if(!this._timers.leviathan_throw) this._timers.leviathan_throw=0;
+            if(!this._timers.leviathan_recall) this._timers.leviathan_recall=0;
+            this._timers.leviathan_throw -= dt;
+            this._timers.leviathan_recall -= dt;
+
+            const mods = CONFIG.PLAYER.CLASSES.kratos.weaponMods;
+            const throwCD = (mods.throwCooldown || 1.1) * reduce;
+            const recallCD = (mods.recallCooldown || 0.8) * reduce;
+
+            // Lanzar hacha
+            if(this._timers.leviathan_throw<=0 && !this._leviathanThrown){
+                this._timers.leviathan_throw = throwCD;
+                const targets = nearest(1, mods.throwRange || 320);
+                if(targets.length>0){
+                    this._throwLeviathan(targets[0].x, targets[0].y);
+                } else {
+                    this._throwLeviathan(p.x + p.facing*200, p.y);
+                }
+            }
+            // Recall automático si la hacha está volando
+            if(this._leviathanThrown && this._timers.leviathan_recall<=0){
+                this._timers.leviathan_recall = recallCD;
+                this._recallLeviathan();
+            }
+        }
+
+        // Musashi: Niten Ichi-ryū (doble katana alternada + parry pasivo)
+        if(cls==='musashi'){
+            if(!this._timers.niten) this._timers.niten=0;
+            this._timers.niten -= dt;
+            const mods = CONFIG.PLAYER.CLASSES.musashi.weaponMods;
+            const effCD = (mods.slashCooldown || 0.22) * reduce;
+            if(this._timers.niten<=0){
+                this._timers.niten = effCD;
+                // Alternar mano: 1 = derecha, -1 = izquierda
+                this._musashiHand = (this._musashiHand === 1) ? -1 : 1;
+                this._doMusashiSlash(this._musashiHand);
+            }
+            // Parry pasivo: si recibe daño durante parryWindow, contraataca
+            if(this._musashiParryTimer > 0) this._musashiParryTimer -= dt;
         }
         // tick definitiva (enfriamiento y activa)
         this._updateUltimate(dt);
@@ -512,6 +605,12 @@ export class Game {
             this.ultimateActive={type:'picaro', timer:ult.duration, interval:ult.interval, bombDamage:ult.bombDamage, bombRadius:ult.bombRadius, tick:0};
             this.audio.dagger(); this.audio.fireballExplode();
             this.spawnPickupText(this.player.x, this.player.y-28, 'LLUVIA DE BOMBAS!', '#6EE7B7');
+        } else if(cls==='alucard'){
+            this._doUltimateAlucard();
+        } else if(cls==='kratos'){
+            this._doUltimateKratos();
+        } else if(cls==='musashi'){
+            this._doUltimateMusashi();
         }
         this._updateUltimateButton();
     }
@@ -554,10 +653,18 @@ export class Game {
             }
         } else if(ult.type==='cu'){
             // Gae Bolg ya explotó al activar, solo espera timer
+        } else if(ult.type==='alucard'){
+            this._updateUltimateAlucard(dt);
+        } else if(ult.type==='kratos'){
+            this._updateUltimateKratos(dt);
+        } else if(ult.type==='musashi'){
+            this._updateUltimateMusashi(dt);
         }
         if(ult.timer<=0){
             this.ultimateActive=null;
             this._ultBeamPulse=0;
+            // Reset speed boost de Kratos
+            if(this.player) this.player._rageSpeedBoost = 1;
         }
     }
 
@@ -636,31 +743,117 @@ export class Game {
         }
         this.audio.dagger();
     }
-    _doUltimateCu(tx,ty, ultCfg){
-        // lanza cae y explota
-        const p=this.player;
-        // marca en el suelo
-        this.spawnExplosion(tx,ty,18,'#F87171');
-        // retardo de 0.35s y explosión
-        setTimeout(()=>{
-            if(this.state!=='GAMEPLAY' || !this.player) return;
-            const dmg=Math.ceil(ultCfg.damage * p.stats.damageMultiplier);
-            const candidates=this.entityManager.grid.query(tx,ty,ultCfg.explosion);
-            for(const e of candidates){
-                if(e.type!=='enemy'||!e.alive) continue;
-                const dx=e.x-tx, dy=e.y-ty;
-                if(dx*dx+dy*dy < ultCfg.explosion*ultCfg.explosion){
-                    const dead=e.takeDamage(dmg);
-                    this.spawnDamageNumber(e.x,e.y-14, `${dmg}`, '#F87171');
-                    const len=Math.hypot(dx,dy)||1;
+    _doUltimateCu(tx, ty, ultCfg) {
+        const p = this.player;
+        // Marca en el suelo (indicador visual)
+        this.spawnExplosion(tx, ty, 18, '#F87171');
+
+        // Retardo de 0.35s y luego explosión inicial + replicación
+        setTimeout(() => {
+            if (this.state !== 'GAMEPLAY' || !this.player) return;
+
+            const baseDmg = Math.ceil(ultCfg.damage * p.stats.damageMultiplier);
+            const explosionRadius = ultCfg.explosion; // 96
+            const maxReplications = 5;
+            const replicationRadius = 180; // radio de búsqueda para replicar
+
+            // Conjunto de enemigos ya afectados (para no replicar dos veces desde el mismo)
+            const hitEnemies = new Set();
+            // Cola de explosiones a procesar: { x, y, sourceEnemy, depth }
+            const explosionQueue = [{ x: tx, y: ty, sourceEnemy: null, depth: 0 }];
+            let totalReplications = 0;
+
+            const processExplosion = (ex) => {
+                const candidates = this.entityManager.grid.query(ex.x, ex.y, explosionRadius);
+                const hitInThisExplosion = [];
+
+                for (const e of candidates) {
+                    if (e.type !== 'enemy' || !e.alive) continue;
+                    if (hitEnemies.has(e)) continue; // ya fue golpeado por alguna explosión anterior
+
+                    const dx = e.x - ex.x, dy = e.y - ex.y;
+                    if (dx*dx + dy*dy >= explosionRadius*explosionRadius) continue;
+
+                    // Golpear enemigo
+                    const dead = e.takeDamage(baseDmg);
+                    this.spawnDamageNumber(e.x, e.y-14, `${baseDmg}`, '#F87171');
+                    const len = Math.hypot(dx, dy) || 1;
                     e.applyKnockback(dx/len, dy/len, 88);
-                    if(dead){ this.kills++; if(Math.random()<0.9) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
-                    else this.audio.enemyHit();
+
+                    hitEnemies.add(e);
+                    hitInThisExplosion.push(e);
+
+                    if (dead) {
+                        this.kills++;
+                        if (Math.random() < 0.9) this.spawnGemAt(e.x, e.y);
+                        this.audio.enemyDeath();
+                    } else {
+                        this.audio.enemyHit();
+                    }
                 }
-            }
-            this.spawnExplosion(tx,ty,ultCfg.explosion,'#991B1B');
-            this.audio.fireballExplode();
+
+                // Explosión visual
+                this.spawnExplosion(ex.x, ex.y, explosionRadius, '#991B1B');
+                this.audio.fireballExplode();
+
+                // REPLICACIÓN: desde cada enemigo golpeado en ESTA explosión, buscar 1 objetivo nuevo
+                if (totalReplications < maxReplications && ex.depth < 3) { // límite de profundidad 3
+                    for (const sourceEnemy of hitInThisExplosion) {
+                        if (totalReplications >= maxReplications) break;
+
+                        // Buscar enemigo cercano NO golpeado aún
+                        const nearby = this.entityManager.grid.query(sourceEnemy.x, sourceEnemy.y, replicationRadius);
+                        let target = null, bestD2 = replicationRadius * replicationRadius;
+
+                        for (const e of nearby) {
+                            if (e.type !== 'enemy' || !e.alive) continue;
+                            if (hitEnemies.has(e)) continue; // ya afectado
+                            const d2 = (e.x - sourceEnemy.x)**2 + (e.y - sourceEnemy.y)**2;
+                            if (d2 < bestD2) { bestD2 = d2; target = e; }
+                        }
+
+                        if (target) {
+                            totalReplications++;
+                            // Visual: lanza conectando source -> target
+                            this._renderGaeBolgLance(sourceEnemy.x, sourceEnemy.y, target.x, target.y);
+                            // Programar explosión en el nuevo objetivo (pequeño delay escalonado)
+                            setTimeout(() => {
+                                if (this.state !== 'GAMEPLAY') return;
+                                processExplosion({
+                                    x: target.x,
+                                    y: target.y,
+                                    sourceEnemy: target,
+                                    depth: ex.depth + 1
+                                });
+                            }, 60 * totalReplications); // 60ms entre cada replicación
+                        }
+                    }
+                }
+            };
+
+            // Iniciar cadena
+            processExplosion(explosionQueue[0]);
+
         }, 360);
+    }
+
+    // Helper visual: dibuja una lanza momentánea entre dos puntos
+    _renderGaeBolgLance(x1, y1, x2, y2) {
+        // Crear un texto flotante especial que simule la lanza
+        // (el render real se hace en el frame actual via un array temporal)
+        if (!this._gaeBolgLances) this._gaeBolgLances = [];
+        this._gaeBolgLances.push({
+            x1, y1, x2, y2,
+            life: 0.25,
+            maxLife: 0.25,
+            created: performance.now()
+        });
+        // Auto-limpiar
+        setTimeout(() => {
+            if (this._gaeBolgLances) {
+                this._gaeBolgLances = this._gaeBolgLances.filter(l => l.life > 0);
+            }
+        }, 300);
     }
     _doUltimateEmiyaTick(ult){
         const p=this.player;
@@ -682,6 +875,154 @@ export class Game {
             }
         }
         if(hits>0 && Math.random()<0.25) this.audio.enemyHit();
+    }
+
+    // ===== DEFinitivas: Alucard / Kratos / Musashi =====
+
+    _doUltimateAlucard(){
+        const p=this.player;
+        const ult=CONFIG.ULTIMATES.alucard;
+        const count = ult.familiarCount + (p._alucardBonus||0);
+        const familiars = [];
+        for(let i=0;i<count;i++){
+            familiars.push({
+                idx: i,
+                angle: (i/count)*Math.PI*2,
+                orbitSpeed: 1.6 + (i%3)*0.35,
+                dist: 58 + (i%2)*16,
+                x: p.x, y: p.y,
+                tick: 0.2 + i*0.03,
+                tickRate: 0.55,
+                damage: ult.familiarDamage,
+                radius: ult.familiarRadius
+            });
+        }
+        this._alucardFamiliars = familiars;
+        this.ultimateActive = { type:'alucard', timer: ult.duration };
+        this.audio.levelUp(); this.audio.shieldUp();
+        this.spawnPickupText(p.x, p.y-28, 'LIBERATION!', '#F87171');
+    }
+
+    _updateUltimateAlucard(dt){
+        const p=this.player;
+        const ult=this.ultimateActive;
+        const fams=this._alucardFamiliars;
+        if(!fams || !p) return;
+        for(const f of fams){
+            // Orbitar alrededor del jugador
+            f.angle += dt * f.orbitSpeed;
+            f.x = p.x + Math.cos(f.angle)*f.dist;
+            f.y = p.y + Math.sin(f.angle)*f.dist;
+            f.tick -= dt;
+            if(f.tick>0) continue;
+            f.tick = f.tickRate;
+            if(!p.alive) continue;
+            // Cazar enemigo más cercano dentro del radio
+            const candidates = this.entityManager.grid.query(f.x, f.y, f.radius);
+            let target=null, bestD2=f.radius*f.radius;
+            for(const e of candidates){
+                if(e.type!=='enemy'||!e.alive) continue;
+                const d2=(e.x-f.x)**2+(e.y-f.y)**2;
+                if(d2<bestD2){ bestD2=d2; target=e; }
+            }
+            if(!target) continue;
+            const isCrit = Math.random()<p.stats.critChance;
+            const dmg = Math.ceil(f.damage * p.stats.damageMultiplier * (isCrit? p.stats.critDamage:1));
+            const dead = target.takeDamage(dmg);
+            this.spawnDamageNumber(target.x, target.y-12, isCrit?`${dmg}!`:`${dmg}`, isCrit?'#FFBE0B':'#FCA5A5');
+            target.hitFlash=0.12;
+            if(dead){ this.kills++; if(Math.random()<0.85) this.spawnGemAt(target.x,target.y); this.audio.enemyDeath(); }
+            else this.audio.enemyHit();
+            if(Math.random()<0.4) this.spawnExplosion(target.x, target.y, 26, '#F87171');
+        }
+        if(ult.timer<=0) this._alucardFamiliars = [];
+    }
+
+    _doUltimateKratos(){
+        const p=this.player;
+        const ult=CONFIG.ULTIMATES.kratos;
+        p._rageSpeedBoost = ult.speedMult;
+        this._kratosRagePulse = 0;
+        this.ultimateActive = { type:'kratos', timer: ult.duration, damage:ult.damage, radius:ult.radius, tickRate:ult.tickRate, tick:0, lifesteal:ult.lifesteal };
+        this.audio.levelUp(); this.audio.whip();
+        this.spawnPickupText(p.x, p.y-28, 'IRA ESPARTANA!', '#FCA5A5');
+    }
+
+    _updateUltimateKratos(dt){
+        const p=this.player;
+        const ult=this.ultimateActive;
+        this._kratosRagePulse += dt*5;
+        ult.tick -= dt;
+        if(ult.tick>0) return;
+        ult.tick = ult.tickRate;
+        const dmg = Math.ceil(ult.damage * p.stats.damageMultiplier);
+        const r = ult.radius;
+        const candidates = this.entityManager.grid.query(p.x, p.y, r);
+        let hits=0;
+        for(const e of candidates){
+            if(e.type!=='enemy'||!e.alive) continue;
+            const dx=e.x-p.x, dy=e.y-p.y;
+            if(dx*dx+dy*dy > r*r) continue;
+            const dead = e.takeDamage(dmg);
+            this.spawnDamageNumber(e.x, e.y-13, `${dmg}`, '#FCA5A5');
+            const len = Math.hypot(dx,dy)||1;
+            e.applyKnockback(dx/len, dy/len, 130);
+            e.hitFlash = 0.14;
+            hits++;
+            if(dead){ this.kills++; if(Math.random()<0.85) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
+            else this.audio.enemyHit();
+        }
+        if(ult.lifesteal && hits>0) p.heal(dmg * ult.lifesteal);
+        this.spawnExplosion(p.x, p.y, r*0.5, '#991B1B');
+    }
+
+    _doUltimateMusashi(){
+        const p=this.player;
+        const ult=CONFIG.ULTIMATES.musashi;
+        const duration = ult.duration + (p._musashiBonus||0);
+        this._musashiStanceCount = 0;
+        this._musashiStances = [];
+        this.ultimateActive = { type:'musashi', timer: duration, damage:ult.stanceDamage, radius:ult.stanceRadius, interval:ult.stanceInterval, tick:0.4, pulses:0 };
+        this.audio.levelUp(); this.audio.whip();
+        this.spawnPickupText(p.x, p.y-28, 'GORIN NO SHO!', '#FFBE0B');
+    }
+
+    _updateUltimateMusashi(dt){
+        const p=this.player;
+        const ult=this.ultimateActive;
+        // Decaimiento de posturas visuales
+        if(this._musashiStances){
+            for(const s of this._musashiStances) s.timer -= dt;
+            this._musashiStances = this._musashiStances.filter(s=>s.timer>0);
+        }
+        ult.tick -= dt;
+        if(ult.tick>0) return;
+        ult.tick = ult.interval;
+        ult.pulses++;
+        this._musashiStanceCount = ult.pulses;
+        // Visual de postura expansiva
+        this._musashiStances.push({ radius: ult.radius, timer: ult.interval, maxTimer: ult.interval });
+        const dmg = Math.ceil(ult.damage * p.stats.damageMultiplier);
+        const r = ult.radius;
+        const candidates = this.entityManager.grid.query(p.x, p.y, r);
+        let hits=0;
+        for(const e of candidates){
+            if(e.type!=='enemy'||!e.alive) continue;
+            const dx=e.x-p.x, dy=e.y-p.y;
+            if(dx*dx+dy*dy > r*r) continue;
+            const isCrit = Math.random()<p.stats.critChance;
+            const finalDmg = Math.ceil(dmg*(isCrit? p.stats.critDamage:1));
+            const dead = e.takeDamage(finalDmg);
+            this.spawnDamageNumber(e.x, e.y-13, isCrit?`${finalDmg}!`:`${finalDmg}`, isCrit?'#FFBE0B':'#FFD700');
+            const len=Math.hypot(dx,dy)||1;
+            e.applyKnockback(dx/len, dy/len, 90);
+            e.hitFlash=0.12;
+            hits++;
+            if(dead){ this.kills++; if(Math.random()<0.8) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
+            else this.audio.enemyHit();
+        }
+        this.spawnExplosion(p.x, p.y, r*0.55, '#FFBE0B');
+        this.audio.whip();
     }
 
     _updateUltimateButton(){
@@ -707,7 +1048,7 @@ export class Game {
                 btn.classList.toggle('active', this.ultimateActive!==null);
                 const lab=btn.querySelector('.ult-label');
                 if(lab && this.player){
-                    const names={caballero:'CORTE', mago:'RAYO', picaro:'BOMBAS', artoria:'EXCAL', cu:'GAE', emiya:'UBW'};
+                    const names={caballero:'CORTE', mago:'RAYO', picaro:'BOMBAS', artoria:'EXCAL', cu:'GAE', emiya:'UBW', alucard:'LIB', kratos:'RAGE', musashi:'GORIN'};
                     lab.textContent = names[this.player.classId]||'ULT';
                 }
             }
@@ -754,14 +1095,44 @@ export class Game {
         this.audio.shoot();
     }
     _doArtoriaSword(){
-        // doble golpe en misma dirección
-        this._doWhip();
-        setTimeout(()=>{ if(this.state==='GAMEPLAY' && this.player && this.player.classId==='artoria') this._doWhip(); }, 95);
+        // Alterna: primer golpe hacia un lado, segundo hacia el opuesto
+        const p = this.player;
+        if(!p) return;
+        // Buscar enemigo más cercano para orientación base
+        let nearest = null, bestD2 = (CONFIG.PLAYER.CLASSES.artoria.weaponMods.range||118)**2;
+        const preCandidates = this.entityManager.grid.query(p.x, p.y, bestD2+6);
+        for(const e of preCandidates){
+            if(e.type!=='enemy' || !e.alive) continue;
+            const dx=e.x-p.x, dy=e.y-p.y;
+            const d2=dx*dx+dy*dy;
+            if(d2 < bestD2){ bestD2=d2; nearest=e; }
+        }
+        const baseAngle = nearest ? Math.atan2(nearest.y - p.y, nearest.x - p.x) : (p.facing===1?0:Math.PI);
+        const arc = CONFIG.WEAPONS.WHIP.arc; // ~189°
+        // Primer golpe: offset -arc/2 (izquierda) o +arc/2 (derecha) alternando
+        this._artoriaSwingDir = (this._artoriaSwingDir === 1) ? -1 : 1; // alterna 1, -1, 1...
+        const swingOffset = this._artoriaSwingDir * (arc / 2); // ±94.5°
+        const angle1 = baseAngle + swingOffset;
+        p.facing = Math.cos(angle1) >= 0 ? 1 : -1;
+        // Primer golpe con ángulo forzado
+        this._doWhip(angle1);
+        // Segundo golpe en dirección opuesta tras 95ms
+        setTimeout(()=>{
+            if(this.state!=='GAMEPLAY' || !this.player || this.player.classId!=='artoria') return;
+            this._artoriaSwingDir *= -1;
+            const swingOffset2 = this._artoriaSwingDir * (arc / 2);
+            const angle2 = baseAngle + swingOffset2;
+            p.facing = Math.cos(angle2) >= 0 ? 1 : -1;
+            this._doWhip(angle2);
+        }, 95);
     }
     _doLance(){
         const p=this.player;
-        const range=168, width=22;
-        const dmg=Math.ceil(26 * p.stats.damageMultiplier);
+        const clsCfg = CONFIG.PLAYER.CLASSES.cu;
+        const range = clsCfg.weaponMods.range || 168;
+        const width = clsCfg.weaponMods.width || 38; // ahora usa config (38)
+        const baseDmg = clsCfg.weaponMods.damage || 26;
+        const dmg = Math.ceil(baseDmg * p.stats.damageMultiplier);
         // dirección al más cercano o facing
         let dirX=p.facing, dirY=0;
         let nearest=null, bestD2=420*420;
@@ -789,8 +1160,10 @@ export class Game {
             if(proj<0||proj>range) continue;
             const perp=Math.abs(ex*px + ey*py);
             if(perp > halfW + e.radius) continue;
+            // Falloff: más cerca de la punta = más daño (lineal 0.6x en base → 1.3x en punta)
+            const tipFactor = 0.6 + 0.7 * (proj / range);
             const isCrit=Math.random()<p.stats.critChance;
-            const finalDmg=Math.ceil(dmg * (isCrit? p.stats.critDamage:1));
+            const finalDmg=Math.ceil(dmg * tipFactor * (isCrit? p.stats.critDamage:1));
             const dead=e.takeDamage(finalDmg);
             this.spawnDamageNumber(e.x,e.y-13, isCrit?`${finalDmg}!`:`${finalDmg}`, isCrit?'#FFBE0B':'#fff');
             e.applyKnockback(dirX, dirY, 62);
@@ -800,28 +1173,39 @@ export class Game {
         }
         if(hits>0) this.audio.whip();
     }
-    _doWhip(){
+    _doWhip(forcedAngle = null){
         const p=this.player;
-        const range = CONFIG.PLAYER.CLASSES.caballero.weaponMods.range || 108;
-        const dmg = Math.ceil(CONFIG.PLAYER.CLASSES.caballero.weaponMods.damage * p.stats.damageMultiplier);
+        const cls = p.classId === 'artoria' ? 'artoria' : 'caballero';
+        const range = CONFIG.PLAYER.CLASSES[cls].weaponMods.range || 108;
+        const dmg = Math.ceil(CONFIG.PLAYER.CLASSES[cls].weaponMods.damage * p.stats.damageMultiplier);
         const arc = CONFIG.WEAPONS.WHIP.arc;
-        // Auto-ataque: buscar enemigo más cercano en rango para orientar el arco
-        let whipAngle = p.facing===1 ? 0 : Math.PI;
-        let nearest = null, bestD2 = range*range;
+
+        let whipAngle;
+        // SIEMPRE consultar grid para tener candidatos (tanto Artoria como Caballero)
         const preCandidates = this.entityManager.grid.query(p.x, p.y, range+6);
-        for(const e of preCandidates){
-            if(e.type!=='enemy' || !e.alive) continue;
-            const dx=e.x-p.x, dy=e.y-p.y;
-            const d2=dx*dx+dy*dy;
-            if(d2 < bestD2){ bestD2=d2; nearest=e; }
-        }
-        if(nearest){
-            whipAngle = Math.atan2(nearest.y - p.y, nearest.x - p.x);
-            // actualizar facing visual
+
+        if (forcedAngle !== null) {
+            // Artoria: usar ángulo forzado (ya calculado con offset ±arc/2)
+            whipAngle = forcedAngle;
             p.facing = Math.cos(whipAngle) >= 0 ? 1 : -1;
+        } else {
+            // Caballero: auto-aim al enemigo más cercano
+            whipAngle = p.facing===1 ? 0 : Math.PI;
+            let nearest = null, bestD2 = range*range;
+            for(const e of preCandidates){
+                if(e.type!=='enemy' || !e.alive) continue;
+                const dx=e.x-p.x, dy=e.y-p.y;
+                const d2=dx*dx+dy*dy;
+                if(d2 < bestD2){ bestD2=d2; nearest=e; }
+            }
+            if(nearest){
+                whipAngle = Math.atan2(nearest.y - p.y, nearest.x - p.x);
+                p.facing = Math.cos(whipAngle) >= 0 ? 1 : -1;
+            }
         }
+
         this._whipAngle = whipAngle;
-        // Query grid en radio range
+        // Query grid en radio range (ya tenemos preCandidates)
         const candidates = preCandidates;
         let hits=0;
         for(const e of candidates){
@@ -849,8 +1233,9 @@ export class Game {
             }
         }
         if(hits>0) this.audio.whip();
-        this._whipFlash = 0.18;
-        // visual pasará a render: dibujar arco
+        // Registrar swing visual (array para soportar dos golpes superpuestos de Artoria)
+        if (!this._whipSwings) this._whipSwings = [];
+        this._whipSwings.push({ angle: whipAngle, timer: 0.18, maxTimer: 0.18, isArtoria: cls === 'artoria' });
     }
     _doGarlicTick(){
         const p=this.player;
@@ -976,6 +1361,11 @@ export class Game {
                 // Recolección de gemas ya está en Gem.update (magnet)
                 // Level up ya disparado desde Gem
 
+                // Actualizar hacha Léviatán (Kratos)
+                this._updateLeviathan(dt);
+                // Actualizar slashes Musashi
+                this._updateMusashiSlashes(dt);
+
                 if(this.player && this.player.hp<=0){
                     this.player.alive=false;
                     this.setState(GameState.GAME_OVER);
@@ -990,6 +1380,227 @@ export class Game {
             case GameState.GAME_OVER:
                 break;
         }
+    }
+
+    // ===== NUEVAS ARMAS =====
+
+    _fireAlucardShot(startX, startY, angle){
+        const p=this.player;
+        const mods = CONFIG.PLAYER.CLASSES.alucard.weaponMods;
+        const dmg = Math.ceil((mods.damage || 16) * p.stats.damageMultiplier * (Math.random()<p.stats.critChance? p.stats.critDamage:1));
+        const speed = mods.speed || 680;
+        const vx = Math.cos(angle)*speed, vy = Math.sin(angle)*speed;
+        const proj = new Projectile(startX, startY, startX+vx, startY+vy, speed, dmg, 5, '#F87171');
+        proj.isCrit = Math.random()<p.stats.critChance;
+        this.entityManager.add(proj);
+        this.audio.shoot();
+        // Flash visual de pistola
+        this._alucardMuzzleFlash = { x: startX, y: startY, angle, timer: 0.06 };
+    }
+
+    _throwLeviathan(tx, ty){
+        const p=this.player;
+        const mods = CONFIG.PLAYER.CLASSES.kratos.weaponMods;
+        const dmg = Math.ceil((mods.damage || 42) * p.stats.damageMultiplier);
+        const speed = 480;
+        const ang = Math.atan2(ty-p.y, tx-p.x);
+        this._leviathan = {
+            x: p.x, y: p.y,
+            vx: Math.cos(ang)*speed, vy: Math.sin(ang)*speed,
+            targetX: tx, targetY: ty,
+            damage: dmg,
+            ricochetLeft: (mods.ricochet || 2) + (p._kratosBonus||0),
+            returning: false,
+            returnSpeed: 600,
+            trail: []
+        };
+        this.audio.whip(); // sonido de lanzamiento
+    }
+
+    _recallLeviathan(){
+        if(!this._leviathan || this._leviathan.returning) return;
+        const p=this.player;
+        this._leviathan.returning = true;
+        this.audio.shieldUp(); // sonido de recall
+    }
+
+    _updateLeviathan(dt){
+        if(!this._leviathan) return;
+        const l = this._leviathan;
+        const p = this.player;
+
+        if(!l.returning){
+            // Volando hacia objetivo
+            l.x += l.vx * dt;
+            l.y += l.vy * dt;
+            l.trail.unshift({x:l.x, y:l.y});
+            if(l.trail.length>10) l.trail.pop();
+
+            // Colisión con enemigos (ida)
+            const candidates = this.entityManager.grid.query(l.x, l.y, 20);
+            for(const e of candidates){
+                if(e.type!=='enemy'||!e.alive) continue;
+                const dx=l.x-e.x, dy=l.y-e.y, r=l.radius||12;
+                if(dx*dx+dy*dy < r*r){
+                    const dead = e.takeDamage(l.damage);
+                    this.spawnDamageNumber(e.x,e.y-12, `${l.damage}`, '#E2E8F0');
+                    e.applyKnockback(dx,dy,40);
+                    if(dead){ this.kills++; if(Math.random()<0.8) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
+                    else this.audio.enemyHit();
+
+                    // Ricochet
+                    if(l.ricochetLeft > 0){
+                        l.ricochetLeft--;
+                        // Buscar nuevo target cercano
+                        const nearby = this.entityManager.grid.query(l.x, l.y, 180);
+                        let next = null, bestD2=180*180;
+                        for(const e2 of nearby){
+                            if(e2.type!=='enemy'||!e2.alive||e2===e) continue;
+                            const d2=(e2.x-l.x)**2+(e2.y-l.y)**2;
+                            if(d2<bestD2){ bestD2=d2; next=e2; }
+                        }
+                        if(next){
+                            const ang = Math.atan2(next.y-l.y, next.x-l.x);
+                            l.vx = Math.cos(ang)*480; l.vy = Math.sin(ang)*480;
+                            return; // continuar volando
+                        }
+                    }
+                    // Sin ricochet o sin target -> volver
+                    l.returning = true;
+                    return;
+                }
+            }
+        } else {
+            // Volviendo al jugador
+            const dx = p.x - l.x, dy = p.y - l.y;
+            const dist = Math.hypot(dx,dy);
+            if(dist < 25){
+                // Llegó al jugador
+                this._leviathan = null;
+                return;
+            }
+            const speed = l.returnSpeed;
+            l.vx = (dx/dist)*speed; l.vy = (dy/dist)*speed;
+            l.x += l.vx * dt; l.y += l.vy * dt;
+            l.trail.unshift({x:l.x, y:l.y});
+            if(l.trail.length>10) l.trail.pop();
+
+            // Daño en retorno (menor)
+            const candidates = this.entityManager.grid.query(l.x, l.y, 20);
+            for(const e of candidates){
+                if(e.type!=='enemy'||!e.alive) continue;
+                const dmg = Math.ceil((CONFIG.PLAYER.CLASSES.kratos.weaponMods.recallDamage||28) * p.stats.damageMultiplier);
+                const dead = e.takeDamage(dmg);
+                this.spawnDamageNumber(e.x,e.y-10, `${dmg}`, '#94A3B8');
+                if(dead){ this.kills++; if(Math.random()<0.7) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
+            }
+        }
+
+        // Fuera de límites -> volver
+        if(l.x < -50 || l.x > this.worldWidth+50 || l.y < -50 || l.y > this.worldHeight+50){
+            l.returning = true;
+        }
+    }
+
+    _doMusashiSlash(hand){
+        // hand: 1 = derecha, -1 = izquierda
+        const p=this.player;
+        const mods = CONFIG.PLAYER.CLASSES.musashi.weaponMods;
+        const range = mods.range || 105;
+        const dmg = Math.ceil((mods.damage || 18) * p.stats.damageMultiplier);
+        const arc = Math.PI * 0.9; // ~162°
+
+        // Ángulo base hacia enemigo más cercano o facing
+        let baseAngle = p.facing===1 ? 0 : Math.PI;
+        let nearest=null, bestD2=range*range;
+        const candidates = this.entityManager.grid.query(p.x, p.y, range+6);
+        for(const e of candidates){
+            if(e.type!=='enemy'||!e.alive) continue;
+            const dx=e.x-p.x, dy=e.y-p.y, d2=dx*dx+dy*dy;
+            if(d2<bestD2){ bestD2=d2; nearest=e; }
+        }
+        if(nearest){
+            baseAngle = Math.atan2(nearest.y-p.y, nearest.x-p.x);
+            p.facing = Math.cos(baseAngle)>=0?1:-1;
+        }
+
+        // Offset según mano (±30° del centro)
+        const handOffset = hand * (Math.PI/6); // ±30°
+        const slashAngle = baseAngle + handOffset;
+
+        // Activar ventana de parry
+        this._musashiParryTimer = mods.parryWindow || 0.35;
+
+        // Visual
+        this._musashiSlashes = this._musashiSlashes || [];
+        this._musashiSlashes.push({ angle: slashAngle, hand, timer: 0.15, maxTimer: 0.15 });
+
+        // Daño en arco
+        const halfArc = arc/2;
+        const hits = [];
+        for(const e of candidates){
+            if(e.type!=='enemy'||!e.alive) continue;
+            const dx=e.x-p.x, dy=e.y-p.y, d2=dx*dx+dy*dy;
+            if(d2>range*range) continue;
+            const ang = Math.atan2(dy,dx);
+            let delta = Math.abs(ang - slashAngle);
+            if(delta>Math.PI) delta=2*Math.PI-delta;
+            if(delta > halfArc) continue;
+
+            const isCrit = Math.random() < p.stats.critChance;
+            const finalDmg = Math.ceil(dmg * (isCrit? p.stats.critDamage:1));
+            const dead = e.takeDamage(finalDmg);
+            this.spawnDamageNumber(e.x, e.y-13, isCrit?`${finalDmg}!`:`${finalDmg}`, isCrit?'#FFBE0B':'#FFD700');
+            e.applyKnockback(Math.cos(slashAngle), Math.sin(slashAngle), 55);
+            hits.push(e);
+            if(dead){ this.kills++; if(Math.random()<0.75) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
+            else this.audio.enemyHit();
+        }
+        if(hits.length>0) this.audio.whip();
+
+        // Segundo golpe dual (misma mano, 60ms después)
+        if(mods.dualHits > 1){
+            setTimeout(()=>{
+                if(this.state!=='GAMEPLAY'||!this.player||this.player.classId!=='musashi') return;
+                for(const e of hits){
+                    if(!e.alive) continue;
+                    const isCrit = Math.random() < p.stats.critChance;
+                    const finalDmg = Math.ceil(dmg * 0.7 * (isCrit? p.stats.critDamage:1)); // 70% dmg
+                    const dead = e.takeDamage(finalDmg);
+                    this.spawnDamageNumber(e.x, e.y-10, isCrit?`${finalDmg}!`:`${finalDmg}`, isCrit?'#FFBE0B':'#FFD700');
+                    if(dead){ this.kills++; if(Math.random()<0.7) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
+                }
+            }, 60);
+        }
+    }
+
+    _updateMusashiSlashes(dt){
+        if(!this._musashiSlashes) return;
+        for(const s of this._musashiSlashes) s.timer -= dt;
+        this._musashiSlashes = this._musashiSlashes.filter(s=>s.timer>0);
+    }
+
+    _tryMusashiParry(attacker){
+        if(this._musashiParryTimer<=0) return false;
+        if(!attacker || !attacker.alive) return false;
+        const p=this.player;
+        this._musashiParryTimer = 0;
+        const mods = CONFIG.PLAYER.CLASSES.musashi.weaponMods;
+        const baseDmg = Math.ceil((mods.damage||18) * 2.2 * p.stats.damageMultiplier);
+        const dx = attacker.x - p.x, dy = attacker.y - p.y;
+        const len = Math.hypot(dx,dy)||1;
+        attacker.applyKnockback(dx/len, dy/len, 150);
+        attacker.hitFlash = 0.2;
+        const isCrit = Math.random()<p.stats.critChance;
+        const finalDmg = Math.ceil(baseDmg*(isCrit? p.stats.critDamage:1));
+        const dead = attacker.takeDamage(finalDmg);
+        this.spawnDamageNumber(attacker.x, attacker.y-14, isCrit?`${finalDmg}!`:`${finalDmg}`, '#FFBE0B');
+        this._musashiSlashes = this._musashiSlashes || [];
+        this._musashiSlashes.push({ angle: Math.atan2(dy,dx), hand: 0, timer: 0.3, maxTimer: 0.3, isParry: true });
+        this.audio.shieldBlock();
+        if(dead){ this.kills++; if(Math.random()<0.8) this.spawnGemAt(attacker.x, attacker.y); this.audio.enemyDeath(); }
+        else this.audio.enemyHit();
+        return true;
     }
 
     triggerLevelUp(){
@@ -1031,6 +1642,9 @@ export class Game {
             case 'artoria_up': p.stats.damageMultiplier+=0.12; p._artoriaBonus=(p._artoriaBonus||0)+4; break;
             case 'cu_up': p.stats.damageMultiplier+=0.10; p._cuBonus=(p._cuBonus||0)+18; break;
             case 'emiya_up': p.stats.projectileCount+=1; p._emiyaBonus=(p._emiyaBonus||0)+1; break;
+            case 'alucard_up': p._alucardBonus=(p._alucardBonus||0)+2; break;
+            case 'kratos_up': p._kratosBonus=(p._kratosBonus||0)+2; break;
+            case 'musashi_up': p._musashiBonus=(p._musashiBonus||0)+2.4; break;
         }
         this.audio.pickup();
         this.spawnPickupText(p.x, p.y-24, 'MEJORA!', '#ffbe0b');
@@ -1137,44 +1751,70 @@ export class Game {
         }
         ctx.globalAlpha=1;
 
-        // Whip arco visual -- ahora orientado al enemigo más cercano
-        if(this._whipFlash>0 && this.player){
+        // Whip / Espada arcos visuales — ahora usando array _whipSwings (soporta 2 golpes superpuestos Artoria)
+        if(this._whipSwings && this._whipSwings.length > 0 && this.player){
             const p=this.player;
             const sxp=p.x - cam.x, syp=p.y - cam.y;
-            const range= (CONFIG.PLAYER.CLASSES.caballero.weaponMods.range||108);
-            const alpha = this._whipFlash / 0.18;
-            ctx.fillStyle=`rgba(97,12,39,${0.28*alpha})`;
-            ctx.strokeStyle=`rgba(226,232,240,${0.45*alpha})`;
-            ctx.lineWidth=2;
-            const start = (this._whipAngle || (p.facing===1?0:Math.PI)) - CONFIG.WEAPONS.WHIP.arc/2;
-            ctx.beginPath(); ctx.moveTo(sxp,syp); ctx.arc(sxp,syp, range, start, start+CONFIG.WEAPONS.WHIP.arc); ctx.closePath(); ctx.fill(); ctx.stroke();
-            // brillo interior gótico
-            const ang = this._whipAngle || 0;
-            ctx.fillStyle=`rgba(59,7,84,${0.22*alpha})`;
-            ctx.beginPath(); ctx.arc(sxp + Math.cos(ang)*range*0.58, syp + Math.sin(ang)*range*0.58, 9, 0, Math.PI*2); ctx.fill();
+            const arc = CONFIG.WEAPONS.WHIP.arc; // ~1.05 PI = 189°
+
+            for(const swing of this._whipSwings){
+                const alpha = swing.timer / swing.maxTimer; // 1.0 -> 0.0
+                if (alpha <= 0) continue;
+
+                const isArtoria = swing.isArtoria;
+                const range = isArtoria ? (CONFIG.PLAYER.CLASSES.artoria.weaponMods.range||118) : (CONFIG.PLAYER.CLASSES.caballero.weaponMods.range||108);
+                const angle = swing.angle; // ángulo fijo del golpe (ya tiene el offset ±arc/2 aplicado)
+                const start = angle - arc/2;
+
+                if (isArtoria) {
+                    // Artoria: arco azul/dorado nítido, sin barrido interno
+                    ctx.fillStyle=`rgba(30,64,175,${0.35*alpha})`; // azul Artoria
+                    ctx.strokeStyle=`rgba(255,190,11,${0.7*alpha})`; // borde dorado
+                    ctx.lineWidth=3;
+                    ctx.beginPath(); ctx.moveTo(sxp,syp); ctx.arc(sxp,syp, range, start, start+arc); ctx.closePath(); ctx.fill(); ctx.stroke();
+                    // Brillo central dorado en la dirección del golpe
+                    ctx.fillStyle=`rgba(255,190,11,${0.5*alpha})`;
+                    ctx.beginPath(); ctx.arc(sxp + Math.cos(angle)*range*0.55, syp + Math.sin(angle)*range*0.55, 12, 0, Math.PI*2); ctx.fill();
+                    // Línea de "corte" fina desde el jugador hasta el borde
+                    ctx.strokeStyle=`rgba(255,255,255,${0.45*alpha})`;
+                    ctx.lineWidth=1.5;
+                    ctx.beginPath(); ctx.moveTo(sxp, syp); ctx.lineTo(sxp + Math.cos(angle)*range, syp + Math.sin(angle)*range); ctx.stroke();
+                } else {
+                    // Caballero: arco bordó/blanco (comportamiento original)
+                    ctx.fillStyle=`rgba(97,12,39,${0.3*alpha})`;
+                    ctx.strokeStyle=`rgba(226,232,240,${0.5*alpha})`;
+                    ctx.lineWidth=2;
+                    ctx.beginPath(); ctx.moveTo(sxp,syp); ctx.arc(sxp,syp, range, start, start+arc); ctx.closePath(); ctx.fill(); ctx.stroke();
+                    ctx.fillStyle=`rgba(59,7,84,${0.25*alpha})`;
+                    ctx.beginPath(); ctx.arc(sxp + Math.cos(angle)*range*0.58, syp + Math.sin(angle)*range*0.58, 9, 0, Math.PI*2); ctx.fill();
+                }
+            }
         }
-        // Lanza roja Cu -- línea recta
+        // Lanza roja Cu -- línea recta (ancho desde config)
         if(this._lanceFlash>0 && this.player && this.player.classId==='cu'){
             const p=this.player;
             const sxp=p.x - cam.x, syp=p.y - cam.y;
             const ang=this._lanceAngle || 0;
-            const range=168;
+            const clsCfg = CONFIG.PLAYER.CLASSES.cu;
+            const range = clsCfg.weaponMods.range || 168;
+            const width = clsCfg.weaponMods.width || 38;
             const alpha=this._lanceFlash / 0.18;
             ctx.save();
             ctx.translate(sxp, syp);
             ctx.rotate(ang);
-            // asta
+            // asta (ancho variable)
+            const halfW = width/2;
             ctx.fillStyle=`rgba(153,27,27,${0.92*alpha})`;
-            ctx.fillRect(0, -3, range, 6);
+            ctx.fillRect(0, -halfW, range, width);
             ctx.fillStyle=`rgba(248,113,113,${0.95*alpha})`;
-            ctx.fillRect(0, -1, range, 2);
-            // punta
+            ctx.fillRect(0, -halfW*0.4, range, width*0.4);
+            // punta triangular
             ctx.fillStyle='#000';
-            ctx.fillRect(range-2, -5, 10, 10);
+            ctx.beginPath(); ctx.moveTo(range, -halfW*1.6); ctx.lineTo(range + 14, 0); ctx.lineTo(range, halfW*1.6); ctx.closePath(); ctx.fill();
             ctx.fillStyle='#F87171';
-            ctx.beginPath(); ctx.moveTo(range+8, 0); ctx.lineTo(range-2, -5); ctx.lineTo(range-2, 5); ctx.closePath(); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(range, -halfW*1.2); ctx.lineTo(range + 10, 0); ctx.lineTo(range, halfW*1.2); ctx.closePath(); ctx.fill();
             ctx.fillStyle='#FFFFFF';
-            ctx.beginPath(); ctx.moveTo(range+6, 0); ctx.lineTo(range-1, -2); ctx.lineTo(range-1, 2); ctx.closePath(); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(range, -halfW*0.6); ctx.lineTo(range + 6, 0); ctx.lineTo(range, halfW*0.6); ctx.closePath(); ctx.fill();
             ctx.restore();
             this._lanceFlash-=0.016;
             if(this._lanceFlash<0) this._lanceFlash=0;
@@ -1248,6 +1888,62 @@ export class Game {
                     ctx.fillStyle=`rgba(212,212,216,${0.9*pulse})`;
                     ctx.fillRect(rx-1, ry-10, 2, 6);
                 }
+            } else if(ult.type==='alucard'){
+                const pulse = 0.7 + Math.sin(this._ultBeamPulse*0.9)*0.3;
+                ctx.strokeStyle = `rgba(248,113,113,${0.28*pulse})`; ctx.lineWidth=1.5; ctx.setLineDash([5,5]);
+                ctx.beginPath(); ctx.arc(sxp, syp, 70, 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+                for(const f of this._alucardFamiliars){
+                    const fx = f.x - cam.x, fy = f.y - cam.y;
+                    if(fx < -40 || fx > cam.w+40 || fy < -40 || fy > cam.h+40) continue;
+                    // sombra
+                    ctx.fillStyle='rgba(0,0,0,0.3)'; ctx.fillRect(fx-6, fy+7, 12, 3);
+                    // cuerpo de murciélago
+                    ctx.fillStyle='#7F1D1D';
+                    ctx.beginPath(); ctx.arc(fx, fy, 6, 0, Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(fx-3, fy-2, 3, 0, Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(fx+3, fy-2, 3, 0, Math.PI*2); ctx.fill();
+                    // alas batiendo
+                    const flap = Math.sin(this.elapsed*14 + f.idx)*3;
+                    ctx.fillStyle='rgba(127,29,29,0.9)';
+                    ctx.beginPath(); ctx.moveTo(fx, fy-1); ctx.lineTo(fx-9, fy-5+flap); ctx.lineTo(fx-6, fy+2); ctx.closePath(); ctx.fill();
+                    ctx.beginPath(); ctx.moveTo(fx, fy-1); ctx.lineTo(fx+9, fy-5+flap); ctx.lineTo(fx+6, fy+2); ctx.closePath(); ctx.fill();
+                    // ojos
+                    ctx.fillStyle='#fff'; ctx.fillRect(fx-2, fy-2, 2, 2); ctx.fillRect(fx+1, fy-2, 2, 2);
+                    ctx.fillStyle='#000'; ctx.fillRect(fx-2, fy-2, 1, 1); ctx.fillRect(fx+1, fy-2, 1, 1);
+                    // aura de caza
+                    ctx.strokeStyle=`rgba(248,113,113,${0.12*pulse})`; ctx.lineWidth=1;
+                    ctx.beginPath(); ctx.arc(fx, fy, 26, 0, Math.PI*2); ctx.stroke();
+                }
+            } else if(ult.type==='kratos'){
+                const pulse = 0.62 + Math.sin(this._ultBeamPulse*1.4)*0.34;
+                const r = ult.radius;
+                ctx.fillStyle=`rgba(153,27,27,${0.30*pulse})`;
+                ctx.beginPath(); ctx.arc(sxp, syp, r, 0, Math.PI*2); ctx.fill();
+                ctx.strokeStyle=`rgba(248,113,113,${0.55*pulse})`; ctx.lineWidth=3;
+                ctx.beginPath(); ctx.arc(sxp, syp, r, 0, Math.PI*2); ctx.stroke();
+                ctx.strokeStyle=`rgba(255,255,255,${0.35*pulse})`; ctx.lineWidth=1.2;
+                ctx.beginPath(); ctx.arc(sxp, syp, r*0.6, 0, Math.PI*2); ctx.stroke();
+                ctx.fillStyle=`rgba(255,255,255,${0.8*pulse})`;
+                for(let i=0;i<8;i++){
+                    const a = i*(Math.PI*2/8) + this.elapsed*2;
+                    const ix = sxp + Math.cos(a)*r*0.35;
+                    const iy = syp + Math.sin(a)*r*0.35;
+                    ctx.beginPath(); ctx.moveTo(ix, iy-8); ctx.lineTo(ix+5, iy+6); ctx.lineTo(ix-5, iy+6); ctx.closePath(); ctx.fill();
+                }
+            } else if(ult.type==='musashi'){
+                const pulse = 0.65 + Math.sin(this._ultBeamPulse*1.1)*0.3;
+                ctx.strokeStyle=`rgba(255,190,11,${0.5*pulse})`; ctx.lineWidth=2; ctx.setLineDash([10,6]);
+                ctx.beginPath(); ctx.arc(sxp, syp, 40 + Math.sin(this._ultBeamPulse*0.7)*8, 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+                ctx.fillStyle=`rgba(255,190,11,${0.16*pulse})`;
+                ctx.beginPath(); ctx.arc(sxp, syp, 34, 0, Math.PI*2); ctx.fill();
+                // pip de postura actual (5 posturas)
+                const n = Math.min(ult.pulses||1, 5);
+                for(let i=0;i<5;i++){
+                    const a = i*(Math.PI*2/5) - Math.PI/2;
+                    const kx = sxp + Math.cos(a)*22, ky = syp + Math.sin(a)*22;
+                    ctx.fillStyle = i < n ? `rgba(255,190,11,${0.9*pulse})` : 'rgba(255,255,255,0.25)';
+                    ctx.fillRect(kx-2, ky-2, 4, 4);
+                }
             }
         }
         // Bombas de la definitiva del pícaro/cu (antes de explotar)
@@ -1265,6 +1961,172 @@ export class Game {
             ctx.fillRect(sx-2, sy-2, 4, 4);
             ctx.fillStyle=`rgba(255,255,255,${0.9*pulse})`;
             ctx.fillRect(sx-3, sy-3, 2, 2);
+        }
+
+        // Lanzas de replicación Gae Bolg (Cu Chulainn)
+        if(this._gaeBolgLances && this._gaeBolgLances.length > 0){
+            const now = performance.now();
+            for(const lance of this._gaeBolgLances){
+                const age = (now - lance.created) / 1000;
+                const alpha = 1 - (age / lance.maxLife);
+                if(alpha <= 0) continue;
+
+                const sx1 = lance.x1 - cam.x, sy1 = lance.y1 - cam.y;
+                const sx2 = lance.x2 - cam.x, sy2 = lance.y2 - cam.y;
+
+                ctx.save();
+                ctx.strokeStyle = `rgba(248,113,113,${0.9*alpha})`;
+                ctx.lineWidth = 3;
+                ctx.setLineDash([8, 4]);
+                ctx.beginPath();
+                ctx.moveTo(sx1, sy1);
+                ctx.lineTo(sx2, sy2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Punta de lanza en el destino
+                const ang = Math.atan2(sy2 - sy1, sx2 - sx1);
+                ctx.fillStyle = `rgba(153,27,27,${alpha})`;
+                ctx.save();
+                ctx.translate(sx2, sy2);
+                ctx.rotate(ang);
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(-10, -5);
+                ctx.lineTo(-10, 5);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+
+                // Brillo en el origen
+                ctx.fillStyle = `rgba(255,190,11,${0.7*alpha})`;
+                ctx.beginPath();
+                ctx.arc(sx1, sy1, 4, 0, Math.PI*2);
+                ctx.fill();
+                ctx.restore();
+            }
+            // Limpiar expirados
+            this._gaeBolgLances = this._gaeBolgLances.filter(l => (now - l.created) / 1000 < l.maxLife);
+        }
+
+        // Hacha Léviatán (Kratos) - render trail
+        if(this._leviathan){
+            const l = this._leviathan;
+            const sx = l.x - cam.x, sy = l.y - cam.y;
+            if(sx > -50 && sx < cam.w+50 && sy > -50 && sy < cam.h+50){
+                // Trail
+                ctx.strokeStyle = l.returning ? 'rgba(148,163,184,0.6)' : 'rgba(226,232,240,0.8)';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                for(let i=0;i<l.trail.length;i++){
+                    const t = l.trail[i];
+                    const tx = t.x - cam.x, ty = t.y - cam.y;
+                    if(i===0) ctx.moveTo(tx, ty); else ctx.lineTo(tx, ty);
+                }
+                ctx.stroke();
+                // Hacha
+                ctx.save();
+                ctx.translate(sx, sy);
+                const ang = Math.atan2(l.vy, l.vx) + Math.PI/2;
+                ctx.rotate(ang);
+                // Cabeza hacha
+                ctx.fillStyle = '#1E1E24';
+                ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(14, 6); ctx.lineTo(-14, 6); ctx.closePath(); ctx.fill();
+                ctx.fillStyle = '#94A3B8';
+                ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(11, 4); ctx.lineTo(-11, 4); ctx.closePath(); ctx.fill();
+                // Filo azul helado
+                ctx.fillStyle = l.returning ? '#60A5FA' : '#E2E8F0';
+                ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(8, 2); ctx.lineTo(-8, 2); ctx.closePath(); ctx.fill();
+                // Mango
+                ctx.fillStyle = '#3D2B1F';
+                ctx.fillRect(-2, 4, 4, 28);
+                ctx.fillStyle = '#6B4F3D';
+                ctx.fillRect(-1, 6, 2, 24);
+                ctx.restore();
+                // Brillo retorno
+                if(l.returning){
+                    ctx.fillStyle = 'rgba(96,165,250,0.5)';
+                    ctx.beginPath(); ctx.arc(sx, sy, 18, 0, Math.PI*2); ctx.fill();
+                }
+            }
+        }
+
+        // Slashes Musashi (doble katana)
+        if(this._musashiSlashes && this._musashiSlashes.length > 0 && this.player){
+            const p=this.player;
+            const sxp=p.x - cam.x, syp=p.y - cam.y;
+            for(const s of this._musashiSlashes){
+                const alpha = s.timer / s.maxTimer;
+                if(alpha<=0) continue;
+                const range = CONFIG.PLAYER.CLASSES.musashi.weaponMods.range || 105;
+                const arc = Math.PI * 0.9;
+                const start = s.angle - arc/2;
+
+                if(s.isParry){
+                    // Parry: destello dorado completo 360°
+                    ctx.fillStyle = `rgba(255,190,11,${0.5*alpha})`;
+                    ctx.beginPath(); ctx.arc(sxp, syp, range*0.7, 0, Math.PI*2); ctx.fill();
+                    ctx.strokeStyle = `rgba(255,255,255,${0.8*alpha})`; ctx.lineWidth=3;
+                    ctx.beginPath(); ctx.arc(sxp, syp, range*0.7, 0, Math.PI*2); ctx.stroke();
+                } else {
+                    // Slash normal: arco dorado/amarillo
+                    ctx.fillStyle = `rgba(255,190,11,${0.35*alpha})`;
+                    ctx.strokeStyle = `rgba(255,220,100,${0.7*alpha})`;
+                    ctx.lineWidth = 3;
+                    ctx.beginPath(); ctx.moveTo(sxp,syp); ctx.arc(sxp,syp, range, start, start+arc); ctx.closePath(); ctx.fill(); ctx.stroke();
+                    // Línea de corte
+                    ctx.strokeStyle = `rgba(255,255,255,${0.5*alpha})`; ctx.lineWidth=1.5;
+                    ctx.beginPath(); ctx.moveTo(sxp, syp); ctx.lineTo(sxp + Math.cos(s.angle)*range, syp + Math.sin(s.angle)*range); ctx.stroke();
+                    // Indicador mano (pequeño triángulo en la punta)
+                    ctx.fillStyle = `rgba(255,190,11,${alpha})`;
+                    ctx.save();
+                    ctx.translate(sxp + Math.cos(s.angle)*range, syp + Math.sin(s.angle)*range);
+                    ctx.rotate(s.angle);
+                    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-8,-4); ctx.lineTo(-8,4); ctx.closePath(); ctx.fill();
+                    ctx.restore();
+                }
+            }
+        }
+
+        // Posturas Gorin no Sho (Musashi ultimate)
+        if(this._musashiStances && this._musashiStances.length > 0 && this.player){
+            const p=this.player;
+            const sxp=p.x - cam.x, syp=p.y - cam.y;
+            for(const s of this._musashiStances){
+                const alpha = s.timer / s.maxTimer;
+                if(alpha<=0) continue;
+                // Círculo expandiéndose con kanji visual
+                ctx.strokeStyle = `rgba(255,190,11,${0.7*alpha})`; ctx.lineWidth=2;
+                ctx.setLineDash([8,4]);
+                ctx.beginPath(); ctx.arc(sxp, syp, s.radius * (1-alpha)*0.5 + s.radius*0.5, 0, Math.PI*2); ctx.stroke();
+                ctx.setLineDash([]);
+                // 5 líneas radiales (las 5 posturas)
+                for(let i=0;i<5;i++){
+                    const a = i*(Math.PI*2/5) + s.timer*4;
+                    ctx.strokeStyle = `rgba(255,190,11,${0.5*alpha})`; ctx.lineWidth=1.5;
+                    ctx.beginPath(); ctx.moveTo(sxp + Math.cos(a)*s.radius*0.3, syp + Math.sin(a)*s.radius*0.3);
+                    ctx.lineTo(sxp + Math.cos(a)*s.radius, syp + Math.sin(a)*s.radius); ctx.stroke();
+                }
+            }
+        }
+
+        // Muzzle flash Alucard (pistolas)
+        if(this._alucardMuzzleFlash){
+            const mf = this._alucardMuzzleFlash;
+            const sx = mf.x - cam.x, sy = mf.y - cam.y;
+            const alpha = mf.timer / 0.06;
+            if(alpha>0){
+                ctx.save();
+                ctx.translate(sx, sy);
+                ctx.rotate(mf.angle);
+                ctx.fillStyle = `rgba(248,113,113,${0.9*alpha})`;
+                ctx.fillRect(0, -3, 18, 6);
+                ctx.fillStyle = `rgba(255,255,255,${0.8*alpha})`;
+                ctx.fillRect(0, -1, 14, 2);
+                ctx.restore();
+            }
+            mf.timer -= 1/60; // aprox
+            if(mf.timer <= 0) this._alucardMuzzleFlash = null;
         }
 
         // Floating texts — Excalibur grande pixel

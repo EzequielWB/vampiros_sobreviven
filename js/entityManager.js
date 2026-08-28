@@ -105,17 +105,24 @@ export class EntityManager {
                     e.y += (dy / len) * push * 0.7;
 
                     // Shield del caballero se maneja dentro de takeDamage(game)
-                    const prevCharges = p.shieldCharges;
-                    const dmg = p.takeDamage(e.damage, game);
-                    if (dmg > 0) {
-                        game.spawnDamageNumber?.(p.x, p.y - 18, `-${Math.ceil(dmg)}`, '#e63946');
-                        game.audio?.hurt?.();
-                        e.hitFlash = 0.15;
-                    } else if (prevCharges > 0 && p.shieldCharges < prevCharges) {
-                        // bloqueado por escudo
-                        e.hitFlash = 0.12;
-                    } else if (p.invulnerable > 0) {
-                        // iFrame, no daño
+                    // Parry Musashi: intentar antes de recibir daño
+                    let dmg = 0;
+                    if(p.classId === 'musashi' && game._tryMusashiParry(e)){
+                        // Parry exitoso: no recibir daño, e ya recibió contraataque
+                        dmg = 0;
+                    } else {
+                        const prevCharges = p.shieldCharges;
+                        dmg = p.takeDamage(e.damage, game);
+                        if (dmg > 0) {
+                            game.spawnDamageNumber?.(p.x, p.y - 18, `-${Math.ceil(dmg)}`, '#e63946');
+                            game.audio?.hurt?.();
+                            e.hitFlash = 0.15;
+                        } else if (prevCharges > 0 && p.shieldCharges < prevCharges) {
+                            // bloqueado por escudo
+                            e.hitFlash = 0.12;
+                        } else if (p.invulnerable > 0) {
+                            // iFrame, no daño
+                        }
                     }
                 }
             }

@@ -152,6 +152,69 @@ export const SPRITE_EMIYA = [
   ".....XX..XX.....",
 ];
 
+// Alucard (Hellsing) -- ALTO, abrigo largo ondeando, sombrero fedora, pistolas gemelas en pose disparando
+// Colores: R=sangre, W=blanco hueso, B=negro abismo, E=rojo ojo, Y=oro gatillo
+export const SPRITE_ALUCARD = [
+  ".......XX.......",
+  "......XXXX......",
+  ".....XRRRRRX....",
+  "....XRRRRRRRX...",
+  "...XRRYYYYYYRX..",
+  "..XRRYYWWYYYRRX.",
+  ".XRRYYWWWWYYRRX.",
+  ".XRRWWBBBBWWWRRX",
+  "XRRRWWBBBBWWWRRX",
+  "XRRRWWWWWWWWWRRX",
+  "XRRRRRWWWWRRRRRX",
+  ".XRRRRRRRRRRRRX.",
+  "..XRRRRRRRRRRX..",
+  "...XRRRRRRRRX...",
+  "....XXXXXXXX....",
+  ".....XX..XX.....",
+];
+
+// Kratos (God of War) -- ANCHO, brazos cruzados con hacha Léviatán en espalda, runas brillantes, barba densa
+// Colores: S=piel pálida, R=marcas guerra, B=negro/runas, M=metal hacha, C=azul hielo filo
+export const SPRITE_KRATOS = [
+  "......XXXX......",
+  ".....XXXXXX.....",
+  "....XXXXXXXX....",
+  "...XXSSSSSSXX...",
+  "..XXSSSSSSSSXX..",
+  ".XXSSRRRRSSSSXX.",
+  ".XXSSRRRRSSSSXX.",
+  "XXSSRRCCCCRRSSXX",
+  "XXSSRRCCCCRRSSXX",
+  "XXSSSSCCCCSSSSXX",
+  "XXSSSSMMMMMSSSXX",
+  ".XXSSMMMMMMSSXX.",
+  "..XXSSSSSSSSXX..",
+  "...XXXXMMMMXX...",
+  "....XXMMMMXX....",
+  ".....XXMMXX.....",
+];
+
+// Miyamoto Musashi -- POSTURA NITEN: katanas cruzadas (una alta, otra baja), kimono ondeando, mirada penetrante
+// Colores: Y=kimono dorado, W=blanco/acero, B=negro tsuka, R=detalle rojo, K=rojo oscuro
+export const SPRITE_MUSASHI = [
+  ".......XX.......",
+  "......XXXX......",
+  ".....XYYYYYX....",
+  "....XYYYYYYYX...",
+  "...XYYWWWWWYYX..",
+  "..XYYWWBBBWWYYX.",
+  ".XYYWWBBBBBWWYX.",
+  "XYYYWWBBBBBWWYYX",
+  "XYYYWWWWWWWWWYYX",
+  "XYYWWBBBBBBBWWYX",
+  ".XYYWWBBBBBWWYX.",
+  "..XYYWWWWWWWYX..",
+  "...XYYYYYYYX...",
+  "....XXXXXXXX....",
+  ".....XWWWWX.....",
+  "......XX..XX....",
+];
+
 // Enemigos
 export const SPRITE_GRUNT = [
   "................",
@@ -239,6 +302,9 @@ export const SPRITES = {
   artoria: SPRITE_ARTORIA,
   cu: SPRITE_CU,
   emiya: SPRITE_EMIYA,
+  alucard: SPRITE_ALUCARD,
+  kratos: SPRITE_KRATOS,
+  musashi: SPRITE_MUSASHI,
   grunt: SPRITE_GRUNT,
   tank: SPRITE_TANK,
   runner: SPRITE_RUNNER,

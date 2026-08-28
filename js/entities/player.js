@@ -61,8 +61,11 @@ export class Player {
         const input = game.input.getMovementVector();
         const speed = this.stats.moveSpeed;
 
-        this.vx = input.x * speed;
-        this.vy = input.y * speed;
+        let effectiveSpeed = speed;
+        // Boost de velocidad de Ira Espartana (Kratos ultimate)
+        if(this._rageSpeedBoost) effectiveSpeed *= this._rageSpeedBoost;
+        this.vx = input.x * effectiveSpeed;
+        this.vy = input.y * effectiveSpeed;
 
         // Facing para armas frontales
         if (input.x > 0.1) this.facing = 1;

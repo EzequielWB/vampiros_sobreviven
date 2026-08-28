@@ -66,7 +66,7 @@ export const CONFIG = Object.freeze({
                 desc: 'Hijo de la Luz. Lanza roja lineal | Gae Bolg explosivo.',
                 weapon: 'lance', special: 'gae_bolg',
                 modifiers: { maxHealth: +20, armor: +1, moveSpeed: +18, damageMultiplier: 1.18, cooldownReduction: 0.08 },
-                weaponMods: { range: 168, cooldown: 0.58, damage: 26, width: 22 },
+                weaponMods: { range: 168, cooldown: 0.58, damage: 26, width: 38 },
                 specialMods: {}
             },
             emiya: {
@@ -76,6 +76,30 @@ export const CONFIG = Object.freeze({
                 modifiers: { maxHealth: +5, armor: +1, moveSpeed: +12, damageMultiplier: 1.08, cooldownReduction: 0.10, critChance: 0.08 },
                 weaponMods: { cooldown: 0.34, damage: 13, speed: 520, count: 1 },
                 specialMods: {}
+            },
+            alucard: {
+                id: 'alucard', name: 'Alucard', emoji: '[ALU]', color: '#F87171',
+                desc: 'Vampiro Primordial. Pistolas Casull + Jackal | Liberation: Familiars devoradores.',
+                weapon: 'alucard_guns', special: 'liberation',
+                modifiers: { maxHealth: +35, armor: +3, moveSpeed: +5, damageMultiplier: 1.25, cooldownReduction: 0.12, critChance: 0.15, critDamage: 2.0 },
+                weaponMods: { cooldown: 0.18, damage: 16, speed: 680, count: 2, spread: 0.12 },
+                specialMods: { familiarCount: 6, familiarDamage: 22, familiarDuration: 8, familiarRadius: 280 }
+            },
+            kratos: {
+                id: 'kratos', name: 'Kratos', emoji: '[KRAT]', color: '#E2E8F0',
+                desc: 'Fantasma de Esparta. Hacha Léviatán (lanzar/recall) | Ira Espartana: furia cuerpo a cuerpo.',
+                weapon: 'leviathan', special: 'spartan_rage',
+                modifiers: { maxHealth: +60, armor: +6, moveSpeed: -10, damageMultiplier: 1.35, cooldownReduction: 0.05 },
+                weaponMods: { throwCooldown: 1.1, recallCooldown: 0.8, damage: 42, throwRange: 320, recallDamage: 28, ricochet: 2 },
+                specialMods: { rageDuration: 6, rageDamage: 55, rageRadius: 85, rageSpeed: 1.4 }
+            },
+            musashi: {
+                id: 'musashi', name: 'Miyamoto Musashi', emoji: '[MUS]', color: '#FFBE0B',
+                desc: 'Kensei. Niten Ichi-ryū (doble katana) | Gorin no Sho: 5 posturas perfectas.',
+                weapon: 'niten', special: 'gorin',
+                modifiers: { maxHealth: +15, armor: +2, moveSpeed: +35, damageMultiplier: 1.22, cooldownReduction: 0.15, critChance: 0.22, critDamage: 1.8 },
+                weaponMods: { slashCooldown: 0.22, damage: 18, range: 105, dualHits: 2, parryWindow: 0.35 },
+                specialMods: { stanceDuration: 10, stanceCount: 5, stanceDamage: 38, stanceRadius: 140 }
             }
         }
     },
@@ -125,7 +149,10 @@ export const CONFIG = Object.freeze({
         FIREBALL: { id:'fireball', name:'Bola de Fuego',    emoji:'[FIR]', cooldown: 3.4, damage: 34, speed: 285, radius: 14, explosion: 72, behavior: 'explosive', exclusive: 'mago' },
         ARTORIA_SWORD: { id:'artoria_sword', name:'Excalibur (base)', emoji:'[SWD]', cooldown: 0.62, damage: 19, range: 118, arc: Math.PI*1.05, hits:2, behavior: 'double_arc' },
         LANCE:    { id:'lance',    name:'Gae Dearg',        emoji:'[LNC]', cooldown: 0.58, damage: 26, range: 168, width: 22, behavior: 'line_thrust' },
-        BOW:      { id:'bow',      name:'Arco',             emoji:'[BOW]', cooldown: 0.34, damage: 13, speed: 520, behavior: 'arrow' }
+        BOW:      { id:'bow',      name:'Arco',             emoji:'[BOW]', cooldown: 0.34, damage: 13, speed: 520, behavior: 'arrow' },
+        ALUCARD_GUNS: { id:'alucard_guns', name:'Casull & Jackal', emoji:'[GUN]', cooldown: 0.18, damage: 16, speed: 680, count: 2, spread: 0.12, behavior: 'dual_pistol' },
+        LEVIATHAN: { id:'leviathan', name:'Hacha Léviatán', emoji:'[AXE]', throwCooldown: 1.1, recallCooldown: 0.8, damage: 42, throwRange: 320, recallDamage: 28, ricochet: 2, behavior: 'throw_recall' },
+        NITEN:    { id:'niten',    name:'Niten Ichi-ryū',  emoji:'[KAT]', cooldown: 0.22, damage: 18, range: 105, dualHits: 2, parryWindow: 0.35, behavior: 'dual_slash' }
     },
 
     ULTIMATES: {
@@ -134,7 +161,10 @@ export const CONFIG = Object.freeze({
         picaro:    { id:'ult_pic', name:'Lluvia de Bombas', emoji:'[BMB]', cooldown:30, duration:3,   interval:0.16, bombDamage:26, bombRadius:54, bombsPerTick:1 },
         artoria:   { id:'ult_art', name:'Excalibur',      emoji:'[EXC]', cooldown:30, duration:3,   width:88, length:760, tickDamage:28, tickRate:0.07 },
         cu:        { id:'ult_cu',  name:'Gae Bolg',       emoji:'[GAE]', cooldown:30, duration:0.6,  lanceRange: 520, lanceWidth: 28, damage: 110, explosion: 96 },
-        emiya:     { id:'ult_emi', name:'UBW',            emoji:'[UBW]', cooldown:30, duration:5,   radius: 168, tickDamage:9, tickRate:0.14 }
+        emiya:     { id:'ult_emi', name:'UBW',            emoji:'[UBW]', cooldown:30, duration:5,   radius: 168, tickDamage:9, tickRate:0.14 },
+        alucard:   { id:'ult_alu', name:'Liberation',     emoji:'[LIB]', cooldown:30, duration:10,  familiarCount: 8, familiarDamage: 35, familiarRadius: 320, familiarLife: 8 },
+        kratos:    { id:'ult_kra', name:'Ira Espartana',  emoji:'[RAGE]', cooldown:30, duration:8,   damage: 65, radius: 95, tickRate: 0.12, speedMult: 1.5, lifesteal: 0.15 },
+        musashi:   { id:'ult_mus', name:'Gorin no Sho',   emoji:'[GOR]', cooldown:30, duration:12,  stanceCount: 5, stanceDamage: 48, stanceRadius: 160, stanceInterval: 2.4 }
     },
 
     UPGRADES_POOL: [
@@ -151,6 +181,9 @@ export const CONFIG = Object.freeze({
         { id:'artoria_up',  name:'Espada +15% doble filo', desc:'Excalibur base más fuerte', emoji:'[SWD]', type:'exclusive', forClass:'artoria' },
         { id:'cu_up',       name:'Lanza +18 alcance', desc:'Gae Bolg más letal', emoji:'[LNC]', type:'exclusive', forClass:'cu' },
         { id:'emiya_up',    name:'Arco +1 flecha', desc:'Flechas extra y UBW', emoji:'[BOW]', type:'exclusive', forClass:'emiya' },
+        { id:'alucard_up',  name:'Pistolas +2 familiars', desc:'Liberation invoca más', emoji:'[GUN]', type:'exclusive', forClass:'alucard' },
+        { id:'kratos_up',   name:'Hacha +2 ricochets', desc:'Léviatán rebota más', emoji:'[AXE]', type:'exclusive', forClass:'kratos' },
+        { id:'musashi_up',  name:'Niten +1 postura', desc:'Gorin no Sho dura más', emoji:'[KAT]', type:'exclusive', forClass:'musashi' },
     ],
 
     COLORS: {
