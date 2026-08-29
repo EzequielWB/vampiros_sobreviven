@@ -64,6 +64,9 @@ export class UIHandler {
         document.getElementById('btn-quit')?.addEventListener('click', () => {
             this.game.setState(GameState.MENU);
         });
+        document.getElementById('btn-reroll')?.addEventListener('click', () => {
+            this.game.reRollUpgrades();
+        });
 
         // Cards clickeables
         document.querySelectorAll('.class-card').forEach(card => {
@@ -149,5 +152,15 @@ export class UIHandler {
             });
             c.appendChild(div);
         });
+    }
+
+    /** Muestra/oculta el botón de re-roll con el contador restante (3 por partida máx) */
+    renderRerollButton(remaining) {
+        const btn = document.getElementById('btn-reroll');
+        if (!btn) return;
+        const n = remaining || 0;
+        btn.textContent = `RE-ROLL (${n})`;
+        btn.classList.toggle('hidden', n <= 0);
+        btn.disabled = n <= 0;
     }
 }

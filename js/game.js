@@ -5,7 +5,6 @@ import { CONFIG, GameState } from './config.js';
 import { InputManager } from './inputManager.js';
 import { EntityManager } from './entityManager.js';
 import { WaveDirector } from './systems/waveDirector.js';
-import { WeaponSystem } from './systems/weaponSystem.js';
 import { UIHandler } from './uiHandler.js';
 import { Player } from './entities/player.js';
 import { Enemy } from './entities/enemy.js';
@@ -34,7 +33,6 @@ export class Game {
         this.input = new InputManager();
         this.entityManager = new EntityManager(CONFIG.GRID.CELL_SIZE);
         this.waveDirector = new WaveDirector(this);
-        this.weaponSystem = new WeaponSystem(this);
         this.ui = new UIHandler(this);
         this.audio = new AudioManager();
 
@@ -60,6 +58,7 @@ export class Game {
         this.ultimateActive = null; // {type, timer, dirX, dirY, tick}
         this.ultimateBombs = []; // para picaro: bombas en vuelo
         this._ultBeamPulse = 0;
+        this.remainingRerolls = 3;
 
         this.loop = this.loop.bind(this);
         this._onResize = this._onResize.bind(this);
@@ -96,19 +95,27 @@ export class Game {
         const isMobile = window.innerWidth < 860;
         const rawDpr = window.devicePixelRatio || 1;
         const dpr = isMobile ? Math.min(rawDpr, 1.5) : Math.min(rawDpr, 2);
-        const rect = this.canvas.getBoundingClientRect();
-        const w = rect.width || this.canvas.parentElement.clientWidth || CONFIG.CANVAS.WIDTH;
-        const h = rect.height || w * 9/16;
+        const parent = this.canvas.parentElement;
+        const rect = parent ? parent.getBoundingClientRect() : null;
+        const w = parent ? (parent.clientWidth || rect?.width || CONFIG.CANVAS.WIDTH) : CONFIG.CANVAS.WIDTH;
+        const h = parent ? (parent.clientHeight || rect?.height || w * CONFIG.CANVAS.HEIGHT / CONFIG.CANVAS.WIDTH) : w * CONFIG.CANVAS.HEIGHT / CONFIG.CANVAS.WIDTH;
+        // Usar el aspect ratio real del canvas para que el mundo llene la pantalla
+        // sin deformarse (en mobile landscape el contenedor ocupa toda la pantalla).
+        const aspect = (w > 0 && h > 0) ? (w / h) : (CONFIG.CANVAS.WIDTH / CONFIG.CANVAS.HEIGHT);
         this.canvas.width = Math.floor(CONFIG.CANVAS.WIDTH * dpr);
-        this.canvas.height = Math.floor(CONFIG.CANVAS.HEIGHT * dpr);
+        this.canvas.height = Math.round(CONFIG.CANVAS.WIDTH * dpr / aspect);
         this.canvas.style.width = w + 'px';
         this.canvas.style.height = h + 'px';
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         this.logicalWidth = CONFIG.CANVAS.WIDTH;
-        this.logicalHeight = CONFIG.CANVAS.HEIGHT;
+        this.logicalHeight = Math.round(CONFIG.CANVAS.WIDTH / aspect);
         this.camera.w = this.logicalWidth;
         this.camera.h = this.logicalHeight;
         this._gridPattern = null;
+    }
+    _shouldFillScreen(){
+        // Mobile táctil en landscape: el juego se juega girado y ocupa toda la pantalla
+        return window.innerHeight < window.innerWidth && window.matchMedia('(hover: none) and (pointer: coarse)').matches;
     }
     _ensureGridPattern(){
         if(this._gridPattern) return this._gridPattern;
@@ -194,6 +201,11 @@ export class Game {
         this.input.setJoystickVisible?.(wantJoy);
         document.body.classList.toggle('gameplay', wantJoy);
         document.body.classList.toggle('menu', !wantJoy);
+        // En mobile landscape el contenedor pasa a ocupar toda la pantalla al entrar en
+        // gameplay: recalcular el canvas para adaptarse al nuevo tamaño/aspecto.
+        if(this._shouldFillScreen() && newState === GameState.GAMEPLAY){
+            requestAnimationFrame(() => this._setupCanvas());
+        }
         // side notice solo en menú
         const side=document.getElementById('side-notice');
         if(side){
@@ -208,6 +220,7 @@ export class Game {
         this.lastClass = classId;
         this.elapsed = 0;
         this.kills = 0;
+        this.remainingRerolls = 3;
         this.floatingTexts = [];
         this.explosions = [];
         this.shieldBreaks = [];
@@ -236,7 +249,6 @@ export class Game {
 
         this.entityManager = new EntityManager(CONFIG.GRID.CELL_SIZE);
         this.waveDirector = new WaveDirector(this);
-        this.weaponSystem = new WeaponSystem(this);
 
         const px = this.worldWidth / 2, py = this.worldHeight / 2;
         this.player = new Player(px, py, classId);
@@ -287,8 +299,8 @@ export class Game {
         for(let i=0;i<count;i++){ const ang=Math.random()*Math.PI*2, r=18+Math.random()*26; this.entityManager.add(new Gem(x+Math.cos(ang)*r, y+Math.sin(ang)*r)); }
     }
     spawnGemAt(x,y){ this.entityManager.add(new Gem(x,y)); }
-    spawnEnemyProjectile(x,y,tx,ty,speed,damage,color){
-        this.entityManager.add(new EnemyProjectile(x,y,tx,ty,speed,damage,color));
+    spawnEnemyProjectile(x,y,tx,ty,speed,damage,color,opts){
+        this.entityManager.add(new EnemyProjectile(x,y,tx,ty,speed,damage,color,opts));
     }
     spawnExplosion(x,y,radius,color='#ff6b35'){
         this.explosions.push({x,y,radius, life:0.32, maxLife:0.32, color});
@@ -296,6 +308,26 @@ export class Game {
     spawnShieldBreak(x,y){
         this.shieldBreaks.push({x,y,life:0.45, maxLife:0.45});
         this.audio.shieldBreak();
+    }
+
+    // Helper central para registrar un golpe a enemigo: kills/drop/lifesteal/iframes al golpear
+    _registerHit(e, dead, baseGemChance, dmg){
+        const p = this.player;
+        if(dead){
+            this.kills++;
+            if(Math.random() < baseGemChance * (p?.stats?.gemDropChance ?? 1)) this.spawnGemAt(e.x, e.y);
+            this.audio.enemyDeath();
+        } else {
+            this.audio.enemyHit();
+        }
+        // Life steal genérico (robo de vida por daño infligido)
+        if(p && p.stats.lifesteal > 0 && !dead && dmg){
+            p.heal(p.stats.lifesteal * dmg * 2);
+        }
+        // IFrames breves al hacer daño
+        if(p && p.stats.onHitIFrame && p.invulnerable < 0.1){
+            p.invulnerable = Math.max(p.invulnerable, p._onHitIFrameDuration || 0.14);
+        }
     }
 
     _stressTest(n=120){
@@ -556,17 +588,19 @@ export class Game {
         }
         if(this.ultimateActive) return;
         const cls=this.player.classId;
-        const ult=CONFIG.ULTIMATES[cls];
+        const is2 = (this.player.level>=10) && CONFIG.SECOND_ULTIMATES[cls];
+        this._currentUlt = is2 ? CONFIG.SECOND_ULTIMATES[cls] : CONFIG.ULTIMATES[cls];
+        const ult=this._currentUlt;
         if(!ult) return;
         this.audio.resume();
         this.ultimateCooldown = ult.cooldown;
         // activar según clase
         if(cls==='caballero'){
             // Corte 360 doble rango
-            this.ultimateActive={type:'caballero', timer:ult.duration, range:ult.range, damage:ult.damage};
-            this._doUltimateCaballero();
+            this.ultimateActive={type:'caballero', timer:ult.duration, totalDur:ult.duration, range:ult.range, damage:ult.damage};
+            this._doUltimateCaballero(ult);
             this.audio.whip(); this.audio.shieldUp();
-            this.spawnPickupText(this.player.x, this.player.y-28, 'CORTE DIVINO!', '#FFBE0B');
+            this.spawnPickupText(this.player.x, this.player.y-28, (is2?'ASALTO SAGRADO!':'CORTE DIVINO!'), '#FFBE0B');
         } else if(cls==='mago'){
             let dirX=this.player.facing, dirY=0;
             const nearest=this._findNearestForUltimate(700);
@@ -575,6 +609,7 @@ export class Game {
                 const len=Math.hypot(dx,dy)||1; dirX=dx/len; dirY=dy/len;
             }
             this.ultimateActive={type:'mago', timer:ult.duration, dirX, dirY, width:ult.width, length:ult.length, tickDamage:ult.tickDamage, tickRate:ult.tickRate, tick:0};
+            this.spawnPickupText(this.player.x, this.player.y-28, (is2?'NOVA ARCANA!':'RAYO ANIQUILADOR!'), '#C084FC');
         } else if(cls==='artoria'){
             let dirX=this.player.facing, dirY=0;
             const nearest=this._findNearestForUltimate(700);
@@ -582,35 +617,37 @@ export class Game {
             this.ultimateActive={type:'artoria', timer:ult.duration, dirX, dirY, width:ult.width, length:ult.length, tickDamage:ult.tickDamage, tickRate:ult.tickRate, tick:0};
             // Texto EXCALIBUR!! pixel amarillo grande sobre la cabeza
             this.spawnExcaliburText();
+            if(is2) this.spawnPickupText(this.player.x, this.player.y-40, 'EXCALIBUR PROPHECY!', '#FFD700');
             this.audio.levelUp(); this.audio.fireballShoot();
         } else if(cls==='cu'){
             // Gae Bolg: lanza hacia el más cercano, cae y explota
-            let tx=this.player.x + this.player.facing*520, ty=this.player.y;
-            const nearest=this._findNearestForUltimate(620);
+            const lr = ult.lanceRange || 520;
+            let tx=this.player.x + this.player.facing*lr, ty=this.player.y;
+            const nearest=this._findNearestForUltimate(lr+100);
             if(nearest){ tx=nearest.x; ty=nearest.y; }
             this.ultimateActive={type:'cu', timer:0.55, tx, ty, damage:ult.damage, explosion:ult.explosion};
             // efecto inmediato: marca y luego explota
             this._doUltimateCu(tx,ty, ult);
             this.audio.fireballShoot(); this.audio.fireballExplode();
-            this.spawnPickupText(this.player.x, this.player.y-28, 'GAE BOLG!', '#F87171');
+            this.spawnPickupText(this.player.x, this.player.y-28, (is2?'GAE BOLG MASIVO!':'GAE BOLG!'), '#F87171');
             this._updateUltimateButton();
             return;
         } else if(cls==='emiya'){
             this.ultimateActive={type:'emiya', timer:ult.duration, radius:ult.radius, tickDamage:ult.tickDamage, tickRate:ult.tickRate, tick:0};
             this.audio.levelUp(); this.audio.shoot();
-            this.spawnPickupText(this.player.x, this.player.y-28, 'UNLIMITED BLADE WORKS!', '#D4D4D8');
+            this.spawnPickupText(this.player.x, this.player.y-28, (is2?'DOMO DE ESPADAS!':'UNLIMITED BLADE WORKS!'), '#D4D4D8');
             this._updateUltimateButton();
             return;
         } else if(cls==='picaro'){
-            this.ultimateActive={type:'picaro', timer:ult.duration, interval:ult.interval, bombDamage:ult.bombDamage, bombRadius:ult.bombRadius, tick:0};
+            this.ultimateActive={type:'picaro', timer:ult.duration, interval:ult.interval, bombDamage:ult.bombDamage, bombRadius:ult.bombRadius, bombsPerTick:ult.bombsPerTick||1, tick:0};
             this.audio.dagger(); this.audio.fireballExplode();
-            this.spawnPickupText(this.player.x, this.player.y-28, 'LLUVIA DE BOMBAS!', '#6EE7B7');
+            this.spawnPickupText(this.player.x, this.player.y-28, (is2?'LLUVIA ÁCIDA!':'LLUVIA DE BOMBAS!'), '#6EE7B7');
         } else if(cls==='alucard'){
-            this._doUltimateAlucard();
+            this._doUltimateAlucard(ult);
         } else if(cls==='kratos'){
-            this._doUltimateKratos();
+            this._doUltimateKratos(ult);
         } else if(cls==='musashi'){
-            this._doUltimateMusashi();
+            this._doUltimateMusashi(ult);
         }
         this._updateUltimateButton();
     }
@@ -668,9 +705,9 @@ export class Game {
         }
     }
 
-    _doUltimateCaballero(){
+    _doUltimateCaballero(param){
         const p=this.player;
-        const ult=CONFIG.ULTIMATES.caballero;
+        const ult=param || CONFIG.ULTIMATES.caballero;
         const range=ult.range;
         const dmg=Math.ceil(ult.damage * p.stats.damageMultiplier);
         const candidates=this.entityManager.grid.query(p.x,p.y,range+4);
@@ -684,8 +721,7 @@ export class Game {
             const len=Math.hypot(dx,dy)||1;
             e.applyKnockback(dx/len, dy/len, ult.knockback||110);
             hits++;
-            if(dead){ this.kills++; if(Math.random()<0.85) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
-            else this.audio.enemyHit();
+            this._registerHit(e, dead, 0.85, dmg);
         }
         // onda expansiva visual
         this.spawnExplosion(p.x,p.y,range,'#FFBE0B');
@@ -716,7 +752,7 @@ export class Game {
             if(hits<4) this.spawnDamageNumber(e.x,e.y-10, `${dmg}`, '#A78BFA');
             e.hitFlash=0.12;
             hits++;
-            if(dead){ this.kills++; if(Math.random()<0.9) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
+            this._registerHit(e, dead, 0.9, dmg);
         }
         if(hits>0 && Math.random()<0.3) this.audio.enemyHit();
     }
@@ -725,7 +761,8 @@ export class Game {
         const p=this.player;
         const dmg=Math.ceil(ult.bombDamage * p.stats.damageMultiplier);
         const radius=ult.bombRadius;
-        for(let i=0;i<1;i++){
+        const count = ult.bombsPerTick || 1;
+        for(let i=0;i<count;i++){
             const ang = Math.random()*Math.PI*2;
             const dist = 38 + Math.random()*42;
             const bx = p.x + Math.cos(ang)*dist;
@@ -783,13 +820,7 @@ export class Game {
                     hitEnemies.add(e);
                     hitInThisExplosion.push(e);
 
-                    if (dead) {
-                        this.kills++;
-                        if (Math.random() < 0.9) this.spawnGemAt(e.x, e.y);
-                        this.audio.enemyDeath();
-                    } else {
-                        this.audio.enemyHit();
-                    }
+                    this._registerHit(e, dead, 0.9, baseDmg);
                 }
 
                 // Explosión visual
@@ -871,7 +902,7 @@ export class Game {
                 // efecto de corte: pequeño empuje aleatorio
                 e.applyKnockback((Math.random()-0.5), (Math.random()-0.5), 12);
                 hits++;
-                if(dead){ this.kills++; if(Math.random()<0.75) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
+                this._registerHit(e, dead, 0.75, dmg);
             }
         }
         if(hits>0 && Math.random()<0.25) this.audio.enemyHit();
@@ -879,9 +910,9 @@ export class Game {
 
     // ===== DEFinitivas: Alucard / Kratos / Musashi =====
 
-    _doUltimateAlucard(){
+    _doUltimateAlucard(param){
         const p=this.player;
-        const ult=CONFIG.ULTIMATES.alucard;
+        const ult=param || CONFIG.ULTIMATES.alucard;
         const count = ult.familiarCount + (p._alucardBonus||0);
         const familiars = [];
         for(let i=0;i<count;i++){
@@ -900,7 +931,7 @@ export class Game {
         this._alucardFamiliars = familiars;
         this.ultimateActive = { type:'alucard', timer: ult.duration };
         this.audio.levelUp(); this.audio.shieldUp();
-        this.spawnPickupText(p.x, p.y-28, 'LIBERATION!', '#F87171');
+        this.spawnPickupText(p.x, p.y-28, (ult.id && ult.id.startsWith('ult2') ? 'CALVARIO DEL CAZADOR!' : 'LIBERATION!'), '#F87171');
     }
 
     _updateUltimateAlucard(dt){
@@ -931,21 +962,20 @@ export class Game {
             const dead = target.takeDamage(dmg);
             this.spawnDamageNumber(target.x, target.y-12, isCrit?`${dmg}!`:`${dmg}`, isCrit?'#FFBE0B':'#FCA5A5');
             target.hitFlash=0.12;
-            if(dead){ this.kills++; if(Math.random()<0.85) this.spawnGemAt(target.x,target.y); this.audio.enemyDeath(); }
-            else this.audio.enemyHit();
+            this._registerHit(target, dead, 0.85, dmg);
             if(Math.random()<0.4) this.spawnExplosion(target.x, target.y, 26, '#F87171');
         }
         if(ult.timer<=0) this._alucardFamiliars = [];
     }
 
-    _doUltimateKratos(){
+    _doUltimateKratos(param){
         const p=this.player;
-        const ult=CONFIG.ULTIMATES.kratos;
+        const ult=param || CONFIG.ULTIMATES.kratos;
         p._rageSpeedBoost = ult.speedMult;
         this._kratosRagePulse = 0;
         this.ultimateActive = { type:'kratos', timer: ult.duration, damage:ult.damage, radius:ult.radius, tickRate:ult.tickRate, tick:0, lifesteal:ult.lifesteal };
         this.audio.levelUp(); this.audio.whip();
-        this.spawnPickupText(p.x, p.y-28, 'IRA ESPARTANA!', '#FCA5A5');
+        this.spawnPickupText(p.x, p.y-28, (ult.id && ult.id.startsWith('ult2') ? 'FURIA DEL OLIMPO!' : 'IRA ESPARTANA!'), '#FCA5A5');
     }
 
     _updateUltimateKratos(dt){
@@ -969,22 +999,21 @@ export class Game {
             e.applyKnockback(dx/len, dy/len, 130);
             e.hitFlash = 0.14;
             hits++;
-            if(dead){ this.kills++; if(Math.random()<0.85) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
-            else this.audio.enemyHit();
+            this._registerHit(e, dead, 0.85, dmg);
         }
         if(ult.lifesteal && hits>0) p.heal(dmg * ult.lifesteal);
         this.spawnExplosion(p.x, p.y, r*0.5, '#991B1B');
     }
 
-    _doUltimateMusashi(){
+    _doUltimateMusashi(param){
         const p=this.player;
-        const ult=CONFIG.ULTIMATES.musashi;
+        const ult=param || CONFIG.ULTIMATES.musashi;
         const duration = ult.duration + (p._musashiBonus||0);
         this._musashiStanceCount = 0;
         this._musashiStances = [];
-        this.ultimateActive = { type:'musashi', timer: duration, damage:ult.stanceDamage, radius:ult.stanceRadius, interval:ult.stanceInterval, tick:0.4, pulses:0 };
+        this.ultimateActive = { type:'musashi', timer: duration, damage:ult.stanceDamage, radius:ult.stanceRadius, interval:ult.stanceInterval, tick:0.4, pulses:0, stanceCount:ult.stanceCount };
         this.audio.levelUp(); this.audio.whip();
-        this.spawnPickupText(p.x, p.y-28, 'GORIN NO SHO!', '#FFBE0B');
+        this.spawnPickupText(p.x, p.y-28, (ult.id && ult.id.startsWith('ult2') ? 'VACÍO DE LOS 5 ANILLOS!' : 'GORIN NO SHO!'), '#FFBE0B');
     }
 
     _updateUltimateMusashi(dt){
@@ -1018,8 +1047,7 @@ export class Game {
             e.applyKnockback(dx/len, dy/len, 90);
             e.hitFlash=0.12;
             hits++;
-            if(dead){ this.kills++; if(Math.random()<0.8) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
-            else this.audio.enemyHit();
+            this._registerHit(e, dead, 0.85, dmg);
         }
         this.spawnExplosion(p.x, p.y, r*0.55, '#FFBE0B');
         this.audio.whip();
@@ -1049,7 +1077,10 @@ export class Game {
                 const lab=btn.querySelector('.ult-label');
                 if(lab && this.player){
                     const names={caballero:'CORTE', mago:'RAYO', picaro:'BOMBAS', artoria:'EXCAL', cu:'GAE', emiya:'UBW', alucard:'LIB', kratos:'RAGE', musashi:'GORIN'};
-                    lab.textContent = names[this.player.classId]||'ULT';
+                    const names2={caballero:'ASALTO', mago:'NOVA', picaro:'ACIDO', artoria:'PROFEC', cu:'GBOLG', emiya:'DOMO', alucard:'CALV', kratos:'FURIA', musashi:'VACIO'};
+                    const usr2 = (this.player.level>=10) && names2[this.player.classId];
+                    lab.textContent = (usr2 ? names2[this.player.classId] : (names[this.player.classId]||'ULT'));
+                    btn.classList.toggle('ult2', !!usr2);
                 }
             }
         }
@@ -1058,7 +1089,7 @@ export class Game {
     _fireWand(tx,ty){
         const p=this.player;
         const dmg = Math.ceil(CONFIG.WEAPONS.WAND.damage * p.stats.damageMultiplier);
-        this.entityManager.add(new Projectile(p.x, p.y, tx, ty, 420, dmg, 7, p.classData.color));
+        this.entityManager.add(new Projectile(p.x, p.y, tx, ty, 420 * p.stats.projectileSpeed, dmg, 7, p.classData.color));
         this.audio.shoot();
     }
     _fireDagger(tx,ty){
@@ -1066,7 +1097,7 @@ export class Game {
         const base = CONFIG.WEAPONS.DAGGER.damage;
         const isCritRoll = Math.random() < p.stats.critChance;
         const dmg = Math.ceil(base * p.stats.damageMultiplier * (isCritRoll? p.stats.critDamage : 1));
-        const proj = new Projectile(p.x, p.y, tx, ty, 500, dmg, 5, '#ffbe0b');
+        const proj = new Projectile(p.x, p.y, tx, ty, 500 * p.stats.projectileSpeed, dmg, 5, '#ffbe0b');
         proj.isCrit = isCritRoll;
         this.entityManager.add(proj);
         this.audio.dagger();
@@ -1078,14 +1109,14 @@ export class Game {
         const dmg = Math.ceil((mods.fireballDamage + (bonus.dmg||0)) * p.stats.damageMultiplier);
         const radius = (mods.fireballExplosion || 72) + (bonus.radius||0);
         const speed = mods.fireballSpeed || 285;
-        const fb = new Fireball(p.x, p.y, tx, ty, speed, dmg, radius);
+        const fb = new Fireball(p.x, p.y, tx, ty, speed * p.stats.projectileSpeed, dmg, radius);
         this.entityManager.add(fb);
         this.audio.fireballShoot();
     }
     _fireArrow(tx,ty){
         const p=this.player;
         const dmg=Math.ceil(13 * p.stats.damageMultiplier * (Math.random()<p.stats.critChance? p.stats.critDamage:1));
-        const proj=new Projectile(p.x,p.y,tx,ty,560,dmg,5,'#D4D4D8');
+        const proj=new Projectile(p.x,p.y,tx,ty,560*p.stats.projectileSpeed,dmg,5,'#D4D4D8');
         proj.isCrit = Math.random()<p.stats.critChance;
         proj.isArrow = true;
         // flecha alargada: dirección
@@ -1129,7 +1160,7 @@ export class Game {
     _doLance(){
         const p=this.player;
         const clsCfg = CONFIG.PLAYER.CLASSES.cu;
-        const range = clsCfg.weaponMods.range || 168;
+        const range = (clsCfg.weaponMods.range || 168) * p.stats.weaponRange;
         const width = clsCfg.weaponMods.width || 38; // ahora usa config (38)
         const baseDmg = clsCfg.weaponMods.damage || 26;
         const dmg = Math.ceil(baseDmg * p.stats.damageMultiplier);
@@ -1168,15 +1199,14 @@ export class Game {
             this.spawnDamageNumber(e.x,e.y-13, isCrit?`${finalDmg}!`:`${finalDmg}`, isCrit?'#FFBE0B':'#fff');
             e.applyKnockback(dirX, dirY, 62);
             hits++;
-            if(dead){ this.kills++; if(Math.random()<0.72) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
-            else this.audio.enemyHit();
+            this._registerHit(e, dead, 0.72, finalDmg);
         }
         if(hits>0) this.audio.whip();
     }
     _doWhip(forcedAngle = null){
         const p=this.player;
         const cls = p.classId === 'artoria' ? 'artoria' : 'caballero';
-        const range = CONFIG.PLAYER.CLASSES[cls].weaponMods.range || 108;
+        const range = (CONFIG.PLAYER.CLASSES[cls].weaponMods.range || 108) * p.stats.weaponRange;
         const dmg = Math.ceil(CONFIG.PLAYER.CLASSES[cls].weaponMods.damage * p.stats.damageMultiplier);
         const arc = CONFIG.WEAPONS.WHIP.arc;
 
@@ -1296,8 +1326,12 @@ export class Game {
                     proj.alive=false;
                     if(dead){
                         this.kills++;
-                        if(Math.random()<0.70) this.spawnGemAt(e.x,e.y);
+                        if(Math.random() < 0.70 * (this.player?.stats?.gemDropChance ?? 1)) this.spawnGemAt(e.x,e.y);
                         this.audio.enemyDeath();
+                        const pp=this.player;
+                        if(pp && pp.stats.onHitIFrame && pp.invulnerable < 0.1) pp.invulnerable = Math.max(pp.invulnerable, pp._onHitIFrameDuration||0.14);
+                    } else if(this.player?.stats?.lifesteal>0){
+                        this.player.heal(this.player.stats.lifesteal * dmg * 2);
                     }
                     break;
                 }
@@ -1321,7 +1355,6 @@ export class Game {
             case GameState.GAMEPLAY:
                 this.elapsed+=dt;
                 this.waveDirector.update(dt);
-                this.weaponSystem.update(dt);
                 this._updateWeapons(dt);
 
                 this.entityManager.update(dt, this);
@@ -1347,7 +1380,7 @@ export class Game {
                                 this.spawnDamageNumber(e.x,e.y-12, `${b.damage}`, '#6EE7B7');
                                 const len=Math.hypot(dx,dy)||1;
                                 e.applyKnockback(dx/len, dy/len, 38);
-                                if(dead){ this.kills++; if(Math.random()<0.8) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
+                                this._registerHit(e, dead, 0.8, b.damage);
                             }
                         }
                         this.spawnExplosion(b.x,b.y,b.radius,'#6EE7B7');
@@ -1390,7 +1423,7 @@ export class Game {
         const dmg = Math.ceil((mods.damage || 16) * p.stats.damageMultiplier * (Math.random()<p.stats.critChance? p.stats.critDamage:1));
         const speed = mods.speed || 680;
         const vx = Math.cos(angle)*speed, vy = Math.sin(angle)*speed;
-        const proj = new Projectile(startX, startY, startX+vx, startY+vy, speed, dmg, 5, '#F87171');
+        const proj = new Projectile(startX, startY, startX+vx, startY+vy, speed * p.stats.projectileSpeed, dmg, 5, '#F87171');
         proj.isCrit = Math.random()<p.stats.critChance;
         this.entityManager.add(proj);
         this.audio.shoot();
@@ -1445,15 +1478,14 @@ export class Game {
                     const dead = e.takeDamage(l.damage);
                     this.spawnDamageNumber(e.x,e.y-12, `${l.damage}`, '#E2E8F0');
                     e.applyKnockback(dx,dy,40);
-                    if(dead){ this.kills++; if(Math.random()<0.8) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
-                    else this.audio.enemyHit();
+                    this._registerHit(e, dead, 0.8, l.damage);
 
                     // Ricochet
                     if(l.ricochetLeft > 0){
                         l.ricochetLeft--;
-                        // Buscar nuevo target cercano
-                        const nearby = this.entityManager.grid.query(l.x, l.y, 180);
-                        let next = null, bestD2=180*180;
+                        // Buscar nuevo target cercano (radio acotado para no cubrir demasiada área)
+                        const nearby = this.entityManager.grid.query(l.x, l.y, 110);
+                        let next = null, bestD2=110*110;
                         for(const e2 of nearby){
                             if(e2.type!=='enemy'||!e2.alive||e2===e) continue;
                             const d2=(e2.x-l.x)**2+(e2.y-l.y)**2;
@@ -1492,7 +1524,7 @@ export class Game {
                 const dmg = Math.ceil((CONFIG.PLAYER.CLASSES.kratos.weaponMods.recallDamage||28) * p.stats.damageMultiplier);
                 const dead = e.takeDamage(dmg);
                 this.spawnDamageNumber(e.x,e.y-10, `${dmg}`, '#94A3B8');
-                if(dead){ this.kills++; if(Math.random()<0.7) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
+                this._registerHit(e, dead, 0.7, dmg);
             }
         }
 
@@ -1506,7 +1538,7 @@ export class Game {
         // hand: 1 = derecha, -1 = izquierda
         const p=this.player;
         const mods = CONFIG.PLAYER.CLASSES.musashi.weaponMods;
-        const range = mods.range || 105;
+        const range = (mods.range || 105) * p.stats.weaponRange;
         const dmg = Math.ceil((mods.damage || 18) * p.stats.damageMultiplier);
         const arc = Math.PI * 0.9; // ~162°
 
@@ -1553,8 +1585,7 @@ export class Game {
             this.spawnDamageNumber(e.x, e.y-13, isCrit?`${finalDmg}!`:`${finalDmg}`, isCrit?'#FFBE0B':'#FFD700');
             e.applyKnockback(Math.cos(slashAngle), Math.sin(slashAngle), 55);
             hits.push(e);
-            if(dead){ this.kills++; if(Math.random()<0.75) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
-            else this.audio.enemyHit();
+            this._registerHit(e, dead, 0.75, dmg);
         }
         if(hits.length>0) this.audio.whip();
 
@@ -1568,7 +1599,7 @@ export class Game {
                     const finalDmg = Math.ceil(dmg * 0.7 * (isCrit? p.stats.critDamage:1)); // 70% dmg
                     const dead = e.takeDamage(finalDmg);
                     this.spawnDamageNumber(e.x, e.y-10, isCrit?`${finalDmg}!`:`${finalDmg}`, isCrit?'#FFBE0B':'#FFD700');
-                    if(dead){ this.kills++; if(Math.random()<0.7) this.spawnGemAt(e.x,e.y); this.audio.enemyDeath(); }
+                    this._registerHit(e, dead, 0.7, finalDmg);
                 }
             }, 60);
         }
@@ -1598,20 +1629,34 @@ export class Game {
         this._musashiSlashes = this._musashiSlashes || [];
         this._musashiSlashes.push({ angle: Math.atan2(dy,dx), hand: 0, timer: 0.3, maxTimer: 0.3, isParry: true });
         this.audio.shieldBlock();
-        if(dead){ this.kills++; if(Math.random()<0.8) this.spawnGemAt(attacker.x, attacker.y); this.audio.enemyDeath(); }
-        else this.audio.enemyHit();
+        this._registerHit(attacker, dead, 0.8, finalDmg);
         return true;
     }
 
     triggerLevelUp(){
         this.audio.levelUp();
         const p=this.player;
+        if(p && p.level>=10 && !this._ult2UnlockNotified){
+            this._ult2UnlockNotified=true;
+            const u2=CONFIG.SECOND_ULTIMATES[p.classId];
+            if(u2){ this.spawnPickupText(p.x, p.y-44, `NUEVA TECNICA: ${u2.name}!`, '#FFD700'); this.audio.levelUp(); this.audio.levelUp(); }
+        }
         const pool=CONFIG.UPGRADES_POOL.filter(u=>{
             if(u.type==='exclusive'){
                 return u.forClass===p.classId;
             }
             return true;
         });
+        // Guardar pool para permitir re-rolls dentro de esta subida de nivel
+        this._upgradePool = pool;
+        this.setState(GameState.LEVEL_UP);
+        this._rollUpgradeOptions();
+    }
+
+    // Genera y muestra 3 opciones aleatorias (con lógica de exclusiva forzada)
+    _rollUpgradeOptions() {
+        const pool = this._upgradePool || [];
+        if(pool.length === 0) return;
         // Asegurar que al menos una mejora sea de la técnica exclusiva si está disponible (30% más peso)
         const shuffled=[...pool].sort(()=>Math.random()-0.5);
         // Si hay exclusivas, forzar que una de las 3 sea exclusiva con 70% prob
@@ -1622,8 +1667,17 @@ export class Game {
             const ex = exclusive[Math.floor(Math.random()*exclusive.length)];
             opts[Math.floor(Math.random()*3)] = ex;
         }
-        this.setState(GameState.LEVEL_UP);
         this.ui.renderLevelUpOptions(opts);
+        this.ui.renderRerollButton(this.remainingRerolls);
+    }
+
+    // Re-roll: regenera las 3 opciones (3 por partida máximo)
+    reRollUpgrades(){
+        if(this.state !== GameState.LEVEL_UP) return;
+        if((this.remainingRerolls || 0) <= 0) return;
+        this.remainingRerolls--;
+        this.audio.pickup();
+        this._rollUpgradeOptions();
     }
     applyUpgrade(id){
         const p=this.player;
@@ -1636,6 +1690,12 @@ export class Game {
             case 'cd_up': p.stats.cooldownReduction=Math.min(0.60, p.stats.cooldownReduction+0.10); break;
             case 'proj_up': p.stats.projectileCount+=1; break;
             case 'armor_up': p.stats.armor+=1; break;
+            case 'projspeed_up': p.stats.projectileSpeed*=1.20; break;
+            case 'range_up': p.stats.weaponRange*=1.15; break;
+            case 'crit_up': p.stats.critChance=Math.min(0.7, p.stats.critChance+0.10); break;
+            case 'gemdrop_up': p.stats.gemDropChance+=0.15; break;
+            case 'lifesteal_up': p.stats.lifesteal=Math.min(0.25, p.stats.lifesteal+0.05); break;
+            case 'onhit_iframe_up': p.stats.onHitIFrame=true; p._onHitIFrameDuration=0.14; break;
             case 'garlic_up': p._garlicBonus = (p._garlicBonus||0)+20; if(p.stats.magnetRadius<140) p.stats.magnetRadius+=6; break;
             case 'shield_up': p.shieldMaxCharges = (p.shieldMaxCharges||1)+1; p._shieldCdBonus=(p._shieldCdBonus||0)+1.8; if(!p.shieldActive){ p.shieldCharges=p.shieldMaxCharges; p.shieldActive=true; } break;
             case 'fireball_up': p._fireballBonus.dmg = (p._fireballBonus.dmg||0)+10; p._fireballBonus.radius=(p._fireballBonus.radius||0)+14; p._fireballBonus.cd=(p._fireballBonus.cd||0)+0.22; break;
@@ -1825,9 +1885,10 @@ export class Game {
             const ult=this.ultimateActive;
             const p=this.player; const sxp=p.x - cam.x, syp=p.y - cam.y;
             if(ult.type==='caballero'){
-                const prog = 1 - (ult.timer / CONFIG.ULTIMATES.caballero.duration);
+                const tDur = ult.totalDur || CONFIG.ULTIMATES.caballero.duration;
+                const prog = 1 - (ult.timer / tDur);
                 const r = ult.range * (0.2 + prog*0.85);
-                const alpha = (ult.timer / CONFIG.ULTIMATES.caballero.duration) * 0.42;
+                const alpha = (ult.timer / tDur) * 0.42;
                 ctx.fillStyle=`rgba(255,190,11,${alpha})`;
                 ctx.beginPath(); ctx.arc(sxp, syp, r, 0, Math.PI*2); ctx.fill();
                 ctx.strokeStyle=`rgba(255,255,255,${alpha*0.9})`; ctx.lineWidth=3;
@@ -2154,12 +2215,26 @@ export class Game {
         // HUD extra (arma activa + técnica exclusiva)
         if(this.state===GameState.GAMEPLAY && this.player){
             const cls = CONFIG.PLAYER.CLASSES[this.player.classId];
-            ctx.fillStyle='rgba(0,0,0,0.48)'; ctx.fillRect(this.logicalWidth-230, 46, 220, 28); ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.strokeRect(this.logicalWidth-230, 46, 220, 28);
+            ctx.fillStyle='rgba(0,0,0,0.48)'; ctx.fillRect(this.logicalWidth-260, 46, 250, 28); ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.strokeRect(this.logicalWidth-260, 46, 250, 28);
             ctx.fillStyle='#fff'; ctx.font='10px JetBrains Mono, monospace'; ctx.textAlign='right';
-            const wName = cls.id==='caballero'?'[SWD] Espada+[SHD]':cls.id==='mago'?'[ORB] Varita+[FIR]':'[DAG] Dagas+[GAR]';
+            const wMap={
+                caballero:'[SWD] Espada+[SHD] Escudo',
+                mago:'[ORB] Varita+[FIR] Bola de Fuego',
+                picaro:'[DAG] Dagas+[GAR] Aura de Ajo',
+                artoria:'[SWD] Excalibur base',
+                cu:'[LNC] Gae Dearg',
+                emiya:'[BOW] Arco',
+                alucard:'[GUN] Casull & Jackal',
+                kratos:'[AXE] Léviatán',
+                musashi:'[KAT] Niten Ichi-ryū'
+            };
+            const wName=wMap[cls.id]||cls.id;
+            const ult=CONFIG.ULTIMATES[cls.id];
+            const ult2=CONFIG.SECOND_ULTIMATES[cls.id];
+            ctx.font='10px JetBrains Mono, monospace';
             ctx.fillText(`${cls.emoji} ${cls.name} -- ${wName}`, this.logicalWidth-16, 63);
-            ctx.fillStyle='rgba(255,255,255,0.45)'; ctx.font='9px JetBrains Mono, monospace';
-            ctx.fillText('Auto-ataque - No requiere teclas', this.logicalWidth-16, 72);
+            ctx.fillStyle='rgba(255,255,255,0.45)';
+            ctx.fillText(`ULT: ${ult?ult.name:'?'}  /  Nv10: ${ult2?ult2.name:'-'}`, this.logicalWidth-16, 71);
         }
 
         // HUD minimal: solo Oleadas / Tiempo / Enemigos

@@ -55,11 +55,20 @@ export class EntityManager {
 
     remove(entity) { entity.alive = false; }
 
-    _gc() {
+    _gc(game) {
         const alive = (e) => e.alive !== false;
         // pool enemigos muertos (evita GC spikes con 500+)
         const dead = this.enemies.filter(e=>!alive(e));
-        for(const e of dead) this.releaseToPool(e);
+        for(const e of dead) {
+            // Elite: drop garantizado al morir
+            if(e.elite && e._eliteShouldDrop && !e._eliteDropped){
+                e._eliteDropped = true;
+                if(game?.spawnGemBurst){
+                    game.spawnGemBurst(e.x, e.y, e.def?.guaranteedGems || 5);
+                }
+            }
+            this.releaseToPool(e);
+        }
         this.entities = this.entities.filter(alive);
         this.enemies = this.enemies.filter(alive);
         this.projectiles = this.projectiles.filter(alive);
@@ -112,7 +121,8 @@ export class EntityManager {
                         dmg = 0;
                     } else {
                         const prevCharges = p.shieldCharges;
-                        dmg = p.takeDamage(e.damage, game);
+                        const collisionDmg = e._dmgBuff ? Math.ceil(e.damage * (1 + e._dmgBuff)) : e.damage;
+                        dmg = p.takeDamage(collisionDmg, game);
                         if (dmg > 0) {
                             game.spawnDamageNumber?.(p.x, p.y - 18, `-${Math.ceil(dmg)}`, '#e63946');
                             game.audio?.hurt?.();
@@ -137,7 +147,12 @@ export class EntityManager {
             if (dist2(ep.x, ep.y, p.x, p.y) < r*r) {
                 ep.alive = false;
                 const prev = p.shieldCharges;
-                const dmg = p.takeDamage(ep.damage, game);
+                const dmg = p.takeDamage(ep.damage, game, ep.pierce ? { ignoreArmor: true } : {});
+                if (ep.hex && p.alive) {
+                    // Proyectil hexeado: aplica maldición (reduce velocidad y armadura)
+                    p.applyHex?.(2.0, 1);
+                    if (dmg === 0) game.spawnDamageNumber?.(p.x, p.y - 18, 'MALDITO', '#C084FC');
+                }
                 if (dmg > 0) {
                     game.spawnDamageNumber?.(p.x, p.y - 18, `-${Math.ceil(dmg)}`, '#ff006e');
                     game.audio?.hurt?.();
@@ -204,7 +219,7 @@ export class EntityManager {
         this.rebuildGrid();
         if (this.enemies.length > 0) this.separateEnemies(game);
         this.handleCollisions(game);
-        this._gc();
+        this._gc(game);
     }
 
     render(ctx, camera) {

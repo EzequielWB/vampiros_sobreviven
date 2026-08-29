@@ -28,6 +28,7 @@ export class Player {
         this.facing = 1; // 1 derecha, -1 izquierda
         this.invulnerable = 0;
         this.hitFlash = 0;
+        this.hexTimer = 0;
 
         // Escudo exclusivo caballero
         this.shieldCharges = 0;
@@ -53,7 +54,12 @@ export class Player {
             projectileCount: base.projectileCount + (mod.projectileCount || 0),
             critChance: base.critChance + (mod.critChance || 0),
             critDamage: base.critDamage,
-            pickupRadius: base.pickupRadius
+            pickupRadius: base.pickupRadius,
+            projectileSpeed: 1,
+            weaponRange: 1,
+            lifesteal: 0,
+            gemDropChance: 1,
+            onHitIFrame: false
         };
     }
 
@@ -64,6 +70,8 @@ export class Player {
         let effectiveSpeed = speed;
         // Boost de velocidad de Ira Espartana (Kratos ultimate)
         if(this._rageSpeedBoost) effectiveSpeed *= this._rageSpeedBoost;
+        // Maldición (hex): relentiza
+        if(this.hexTimer > 0){ effectiveSpeed *= 0.55; this.hexTimer -= dt; }
         this.vx = input.x * effectiveSpeed;
         this.vy = input.y * effectiveSpeed;
 
@@ -88,7 +96,7 @@ export class Player {
         this.updateShield(dt, game);
     }
 
-    takeDamage(amount, game = null) {
+    takeDamage(amount, game = null, opts = {}) {
         // Escudo del caballero: bloquea 1 golpe por carga
         if (this.shieldActive && this.shieldCharges > 0) {
             this.shieldCharges -= 1;
@@ -108,7 +116,15 @@ export class Player {
             return 0;
         }
         if (this.invulnerable > 0) return 0;
-        const mitigated = Math.max(1, amount - this.stats.armor);
+        let mitigated;
+        if (opts && opts.ignoreArmor) {
+            // Daño perforante: ignora armadura (poca mitigación)
+            mitigated = Math.max(1, Math.round(amount * 0.9));
+        } else {
+            // Armadura se degrada si el jugador está maldecido (hex)
+            const armor = this.hexTimer > 0 ? this.stats.armor * 0.4 : this.stats.armor;
+            mitigated = Math.max(1, amount - armor);
+        }
         this.hp -= mitigated;
         this.invulnerable = 0.6;
         this.hitFlash = 0.22;
@@ -117,6 +133,12 @@ export class Player {
             this.alive = false;
         }
         return mitigated;
+    }
+
+    // Hex / maldición: reduce velocidad y velocidad de recarga mientras dure el stack
+    applyHex(duration = 1.5, stacks = 1) {
+        this.hexTimer = Math.min(6, (this.hexTimer || 0) + duration);
+        return true;
     }
 
     // Llamado por Game para gestionar respawn de escudo
@@ -191,6 +213,13 @@ export class Player {
             // brillo
             ctx.fillStyle = 'rgba(255,255,255,0.18)';
             ctx.fillRect(sx - w/2, sy - 22, Math.ceil(w * pct), 1);
+        }
+        // Maldición hex: halo violeta pulsante
+        if (this.hexTimer > 0) {
+            const pulse = 0.5 + Math.sin(this.hexTimer * 12) * 0.25;
+            ctx.strokeStyle = `rgba(192,132,252,${pulse})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(sx, sy, 18 + Math.sin(this.hexTimer*10)*3, 0, Math.PI*2); ctx.stroke();
         }
     }
 }

@@ -295,6 +295,186 @@ export const SPRITE_SHOOTER = [
 // Gemas pixel (no sprite 16x16, se dibuja como diamante)
 // Se mantiene el dibujo actual pero con paleta violeta -- ya está en gem.js
 
+// Elite / mini-boss -- Abad Antiguo con capa y detalles dorados
+export const SPRITE_ELITE = [
+  "................",
+  "....XXXXXXXX....",
+  "...XXXXXXXXXX...",
+  "..XXRRRRRRRRXX..",
+  ".XXRRRRRRRRRRXX.",
+  ".XXRYYYYYYYYRXX.",
+  ".XXRR..XX..RRXX.",
+  ".XXRR..XX..RRXX.",
+  ".XXRRYYYYYYRRXX.",
+  "XXRRRRRRRRRRRRXX",
+  "XXRRRRRRRRRRRRXX",
+  "XXRRRRRRRRRRRRXX",
+  ".XXRRRRRRRRRRXX.",
+  "..XXRRRRRRRRXX..",
+  "...XXRRRRRRXX...",
+  "....XXXXXXXX....",
+];
+
+// Suicida explosivo -- Espina Volátil naranja
+export const SPRITE_SUICIDE = [
+  "................",
+  ".......YY.......",
+  ".......YYY......",
+  "......YrrYY.....",
+  ".....YrrrrYY....",
+  "....YrrrrrYYY...",
+  "...YrrrrrYYY....",
+  "..YrrrrYYYYY....",
+  "..YrrrYYYYYY....",
+  ".YYYrrrrrrYYY...",
+  ".YYrrrrrrrYY....",
+  "..YrrrrrYYY.....",
+  "..YrrrYYY.......",
+  "...YYYYYY.......",
+  "....YYYY........",
+  "................",
+];
+
+// Enjambre -- grupo de criaturas verde ftalo
+export const SPRITE_SWARM = [
+  "................",
+  "................",
+  "....GGGG........",
+  "...GGGGGG.......",
+  "...GGggGG...GG..",
+  "...GgggG...GGGG.",
+  "....GGGG...GggG.",
+  "...........GggG.",
+  "...........GGGG.",
+  "..GG..GG........",
+  ".GGGG.GGGG......",
+  "..GG...GG.......",
+  "................",
+  "................",
+  "................",
+  "................",
+];
+
+// Support -- Sacerdote violeta con capucha
+export const SPRITE_SUPPORT = [
+  "................",
+  "......VVVV......",
+  ".....VVVVVV.....",
+  "....VVVVVVVV....",
+  "....VV....VV....",
+  "....V..WW..V....",
+  "....VVWWWWVV....",
+  "...VVVVVVVVVV...",
+  "..VVVVVVVVVVVV..",
+  "..VVVVVVVVVVVV..",
+  "..VVvvvvvvvvVV..",
+  "..VVVVVVVVVVVV..",
+  "...VVVVVVVVVV...",
+  "....VVVVVVVV....",
+  "................",
+  "................",
+];
+
+// Lancero Perforante -- azul, esbelto, con lanza larga
+export const SPRITE_PIERCER = [
+  "................",
+  "......XXXX......",
+  "......XaAX......",
+  ".....XaaAaX.....",
+  ".....XaAAAAX....",
+  "....XaAAAaX.....",
+    "....XaAAaX......",
+    "...XaAAaAX......",
+    "...XaAAAAaX.....",
+  "...XaaaaaaX.....",
+  "..XaWWWWaaX.....",
+  "..XaaaaaaX......",
+  "...XXXXXX.......",
+  "................",
+  "................",
+  "................",
+];
+
+// Brujo Lúgubre -- violeta con ojos blancos brillantes y runas
+export const SPRITE_HEXER = [
+  "....XXXXXX......",
+  "...XXXXXXXX.....",
+  "..XXVVVVVVXX....",
+  "..XVVVVVVVVX....",
+  "..XVvWWWWvVX....",
+  "..XVvWWWWvVX....",
+  "..XVVVVVVVVX....",
+  "...XVVVVVVVX....",
+  "..XXXVVVVXXX....",
+  ".XXVXVVVVXVXX...",
+  ".XXVVVVVVVVXX...",
+  ".XXVVVXXVVVXX...",
+  "..XXVVVVVVXX....",
+  "...XXVVVVXX.....",
+  "....XXXXXX......",
+  "................",
+];
+
+// Berserker -- ancho, piel, marcas rojas de guerra, cuerpo poderoso
+export const SPRITE_BERSERKER = [
+  "....XXXXXXXX....",
+  "...XXXXXXXXXX...",
+  "..XXSSSSSSSSXX..",
+  ".XXSSSSRRSSSSXX.",
+  ".XXSSSRRRRSSSXX.",
+  ".XXSSSSRRSSSSXX.",
+  ".XXSSWWWSSSSSXX.",
+  "XXSSSSSSSSSSSSXX",
+  "XXSSRRRRRRRRSSXX",
+  "XXSSRRRRRRRRSSXX",
+  "XXSSSSSSSSSSSSXX",
+  ".XXSRRRRRRRRXX..",
+  "..XXSSSSSSSSXX..",
+  "...XXXRXXRXXX...",
+  "....XXRXXRXX....",
+  "................",
+];
+
+// Coloso Abisal -- elite tanque masivo, bordó oscuro con detalles dorados
+export const SPRITE_ELITE_COLOSSUS = [
+  "....XXXXXXXX....",
+  "...XXXXXXXXXX...",
+  "..XXXXXXXXXXXX..",
+  ".XXRRRRRRRRRRXX.",
+  ".XRRRRRRRRRRRRX.",
+  "XRRYYYYYYYYYYRRX",
+  "XRRRYYYYYYYYRRRX",
+  "XRRYYYYYYYYYYRRX",
+  "XRRYRRRRRRRRYRRX",
+  "XRRRRRWWWWRRRRRX",
+  "XRRRRRWWWWRRRRRX",
+  "XRRRRRRRRRRRRRRX",
+  "XRRRRRRRRRRRRRRX",
+  ".XRRRRRRRRRRRRX.",
+  ".XXrRRRRRRRRrXX.",
+  "...XXXXXXXXXXXX.",
+];
+
+// Señor Brujo -- elite spawner violeta oscuro con corona y runas doradas
+export const SPRITE_ELITE_HEXLORD = [
+  "..YY....YY......",
+  ".YYYY..YYYY.....",
+  ".YVVYYVVVYY.....",
+  "YVVVVVVVVVVY....",
+  "YVVVVVVVVVVVY...",
+  "YVVvWWWWvVVVVY..",
+  "YVVvWWWWvVVVVVY.",
+  "YVVVVVVVVVVVVVY.",
+  ".YVVVVVVVVVVVY..",
+  "..YVVvvvvvvVY...",
+  "..YVVVVVVVVVY...",
+  "..YVVVvVVvVVY...",
+  "...YVVVVVVVVY...",
+  "...YVVVVVVVY....",
+  "...YVVVVVVVY....",
+  "....YVVVVVY.....",
+];
+
 export const SPRITES = {
   caballero: SPRITE_CABALLERO,
   mago: SPRITE_MAGO,
@@ -309,12 +489,21 @@ export const SPRITES = {
   tank: SPRITE_TANK,
   runner: SPRITE_RUNNER,
   shooter: SPRITE_SHOOTER,
+  elite: SPRITE_ELITE,
+  suicide: SPRITE_SUICIDE,
+  swarm: SPRITE_SWARM,
+  support: SPRITE_SUPPORT,
+  piercer: SPRITE_PIERCER,
+  hexer: SPRITE_HEXER,
+  berserker: SPRITE_BERSERKER,
+  elite_colossus: SPRITE_ELITE_COLOSSUS,
+  elite_hexlord: SPRITE_ELITE_HEXLORD,
 };
 
 const _cache = new Map();
 function _getCachedCanvas(sprite, scale, whiteFlash){
   if(typeof document === 'undefined') return null;
-  const id = sprite === SPRITE_CABALLERO ? 'cab' : sprite === SPRITE_MAGO ? 'mag' : sprite === SPRITE_PICARO ? 'pic' : sprite === SPRITE_ARTORIA ? 'art' : sprite === SPRITE_CU ? 'cu' : sprite === SPRITE_EMIYA ? 'emi' : sprite === SPRITE_GRUNT ? 'gru' : sprite === SPRITE_TANK ? 'tnk' : sprite === SPRITE_RUNNER ? 'run' : sprite === SPRITE_SHOOTER ? 'sho' : 'unk';
+  const id = sprite === SPRITE_CABALLERO ? 'cab' : sprite === SPRITE_MAGO ? 'mag' : sprite === SPRITE_PICARO ? 'pic' : sprite === SPRITE_ARTORIA ? 'art' : sprite === SPRITE_CU ? 'cu' : sprite === SPRITE_EMIYA ? 'emi' : sprite === SPRITE_GRUNT ? 'gru' : sprite === SPRITE_TANK ? 'tnk' : sprite === SPRITE_RUNNER ? 'run' : sprite === SPRITE_SHOOTER ? 'sho' : sprite === SPRITE_ELITE ? 'elt' : sprite === SPRITE_SUICIDE ? 'spi' : sprite === SPRITE_SWARM ? 'swm' : sprite === SPRITE_SUPPORT ? 'sup' : sprite === SPRITE_PIERCER ? 'prc' : sprite === SPRITE_HEXER ? 'hex' : sprite === SPRITE_BERSERKER ? 'brk' : sprite === SPRITE_ELITE_COLOSSUS ? 'col' : sprite === SPRITE_ELITE_HEXLORD ? 'hld' : 'unk';
   const key = `${id}_${scale}_${whiteFlash?1:0}`;
   if(_cache.has(key)) return _cache.get(key);
   const w = sprite[0].length, h = sprite.length;

@@ -4,10 +4,12 @@
 import { normalize } from '../utils.js';
 
 export class EnemyProjectile {
-    constructor(x, y, tx, ty, speed=210, damage=9, color='#3B0754') {
+    constructor(x, y, tx, ty, speed=210, damage=9, color='#3B0754', opts={}) {
         this.type = 'enemyProjectile';
         this.x=x; this.y=y;
         this.radius=5.5; this.damage=damage; this.color=color; this.alive=true;
+        this.pierce = !!opts.pierce;
+        this.hex = !!opts.hex;
         this.life=3.2;
         const n = normalize(tx - x, ty - y);
         this.vx=n.x*speed; this.vy=n.y*speed;
